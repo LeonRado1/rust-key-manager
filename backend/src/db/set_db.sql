@@ -18,11 +18,14 @@ CREATE TABLE password_resets (
 );
 
 
-CREATE TABLE user_keys (
+CREATE TABLE keys (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     key_name VARCHAR(255) NOT NULL,
     key_value TEXT NOT NULL,
+    key_description TEXT,
+    key_type VARCHAR(50) NOT NULL,
+--     key_algorithm VARCHAR(50) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
