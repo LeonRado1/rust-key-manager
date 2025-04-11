@@ -6,24 +6,21 @@ use rocket::State;
 use crate::models::{Key, KeyRequest, PartialKeyRequest, KeysResponse};
 use crate::routes::auth::LoggedUser;
 
+use crate::routes::users::check_user_exists;
 
 /// Get a list of keys for a specific user
 /// # Path Parameters:
 /// - `user_id`: id of the user
-#[get("/<user_id>")]
+#[get("/")]
 async fn list(
     pool: &State<PgPool>,
-    user_id: i32,
     auth: LoggedUser
 ) -> Result<Json<Vec<Key>>, Status> {
-    // Control access to the only user's keys
-    if auth.0 != user_id { return Err(Status::Forbidden); }
-
     let keys = sqlx::query_as::<_, Key>(
         "SELECT id, key_value, key_name, key_type, key_description, expiration_date, created_at
          FROM keys WHERE user_id = $1"
     )
-    .bind(user_id)
+    .bind(auth.0)
     .fetch_all(pool.inner())
     .await
     .map_err(|e| {
@@ -54,7 +51,7 @@ async fn create(
     request_data: Json<KeyRequest>,
     auth: LoggedUser
 ) -> Result<Json<KeysResponse>, Status> {
-    if auth.0 != request_data.user_id { return Err(Status::Forbidden); }
+    check_user_exists(pool.inner(), auth.0).await?;
 
     let key = sqlx::query_as::<_, Key>(
         "INSERT INTO keys (
@@ -62,7 +59,7 @@ async fn create(
                   ) VALUES ($1, $2, $3, $4, $5, $6)
                   RETURNING id, key_value, key_name, key_type, key_description, expiration_date, created_at"
     )
-    .bind(request_data.user_id)
+    .bind(auth.0)
     .bind(&request_data.key_value)
     .bind(&request_data.key_name)
     .bind(&request_data.key_type)
@@ -93,21 +90,12 @@ async fn set_expiration(
     request_data: Json<PartialKeyRequest>,
     auth: LoggedUser
 ) -> Result<Json<KeysResponse>, Status> {
-    // Control existence of the user id in the request
-    if let Some(user_id) = request_data.user_id {
-        // Control access to the only user's keys
-        if auth.0 != user_id {
-            return Err(Status::Forbidden);
-        }
-    } else {
-        return Err(Status::UnprocessableEntity);
-    }
-
     if let Some(expiration_date) = request_data.expiration_date {
         let updated = sqlx::query!(
-            "UPDATE keys SET expiration_date = $1 WHERE id = $2",
+            "UPDATE keys SET expiration_date = $1 WHERE id = $2 AND user_id = $3",
             expiration_date,
-            key_id
+            key_id,
+            auth.0
         )
         .execute(pool.inner())
         .await
@@ -135,12 +123,10 @@ async fn delete(
     key_id: i32,
     auth: LoggedUser
 ) -> Result<Json<KeysResponse>, Status> {
-    // Control access to the only user's keys
-    if auth.0 != key_id { return Err(Status::Forbidden); }
-
     let deleted = sqlx::query!(
-        "DELETE FROM keys WHERE id = $1",
-        key_id
+        "DELETE FROM keys WHERE id = $1 AND user_id = $2",
+        key_id,
+        auth.0
     )
     .execute(pool.inner())
     .await
@@ -198,9 +184,6 @@ async fn import(
     request_data: Json<Vec<KeyRequest>>,
     auth: LoggedUser
 ) -> Result<Json<KeysResponse>, Status> {
-    // Control access to the only user's keys
-    if request_data.iter().any(|key| auth.0 != key.user_id) { return Err(Status::Forbidden); }
-
     for key in request_data.iter() {
         sqlx::query(
             "INSERT INTO keys (
@@ -212,7 +195,7 @@ async fn import(
                       expiration_date
                       ) VALUES ($1, $2, $3, $4, $5, $6)"
         )
-        .bind(key.user_id)
+        .bind(auth.0)
         .bind(&key.key_value)
         .bind(&key.key_name)
         .bind(&key.key_type)

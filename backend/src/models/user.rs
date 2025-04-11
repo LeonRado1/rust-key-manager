@@ -19,3 +19,14 @@ pub struct NewUser {
     pub email: String,
     pub password: String
 }
+
+#[derive(Deserialize)]
+pub struct UpdateUserRequest {
+    pub username: Option<String>,
+    pub email: Option<String>
+}
+
+#[derive(Serialize)]
+pub struct UpdateUserResponse {
+    pub message: String,
+}
