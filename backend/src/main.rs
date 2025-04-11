@@ -6,9 +6,12 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use std::env;
 
-mod routes;
-use routes::*;
 mod models;
+mod routes;
+mod services;
+
+use routes::*;
+use services::*;
 
 #[derive(Serialize)]
 struct Message {
@@ -32,6 +35,10 @@ async fn rocket() -> _ {
     // Load environment variables from the .env file
     dotenv::dotenv().ok();
 
+    // Initialize the email service to process email requests
+    init_email_service();
+    // Use enqueue_email to send emails
+
     // Get the database connection string from environment variables
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
@@ -39,7 +46,8 @@ async fn rocket() -> _ {
     let pool = create_db_pool(&database_url);
 
     // Initialize Rocket and routes
-    rocket::build() // TODO add routes to users and keys, implement resenting password
+    rocket::build()
+        .attach(rocket::shield::Shield::default()) // Mechanism for configuring HTTP security headers
         .mount("/", routes![index])
         .mount("/auth", auth::routes())
         .mount("/users", users::routes())

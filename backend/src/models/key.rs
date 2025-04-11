@@ -9,6 +9,7 @@ pub struct Key {
     pub key_name: String,
     pub key_type: String,
     pub key_description: Option<String>,
+    pub expiration_date: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime
 }
 
@@ -19,6 +20,17 @@ pub struct KeyRequest {
     pub key_name: String,
     pub key_type: String,
     pub key_description: Option<String>,
+    pub expiration_date: Option<NaiveDateTime>
+}
+
+#[derive(Deserialize)]
+pub struct PartialKeyRequest {
+    pub user_id: Option<i32>,
+    pub key_value: Option<String>,
+    pub key_name: Option<String>,
+    pub key_type: Option<String>,
+    pub key_description: Option<String>,
+    pub expiration_date: Option<NaiveDateTime>,
 }
 
 #[derive(Serialize)]
