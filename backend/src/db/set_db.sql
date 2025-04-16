@@ -9,12 +9,12 @@ CREATE TABLE users (
 );
 
 
-CREATE TABLE password_resets (
+CREATE TABLE password_reset_tokens (
     id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL,
-    reset_token VARCHAR(255) NOT NULL,
---     token_expiration TIMESTAMP NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    reset_token TEXT NOT NULL,
+    expiration_date TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 
@@ -25,7 +25,7 @@ CREATE TABLE keys (
     key_value TEXT NOT NULL,
     key_description TEXT,
     key_type VARCHAR(50) NOT NULL,
---     key_algorithm VARCHAR(50) NOT NULL,
+    expiration_date TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

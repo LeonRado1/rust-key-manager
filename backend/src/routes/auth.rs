@@ -3,13 +3,25 @@ use sqlx::PgPool;
 use rocket::serde::json::Json;
 use rocket::http::Status;
 use rocket::{Request, State};
-use bcrypt::verify;
+use bcrypt::{hash, verify, DEFAULT_COST};
 use jsonwebtoken::{encode, Header, EncodingKey, DecodingKey, decode, Validation};
 use chrono::{Duration, Utc};
 use rocket::request::{FromRequest, Outcome};
 use serde::{Serialize, Deserialize};
+use uuid::Uuid;
 
-use crate::models::{User, Claims};
+use crate::models::{
+    User,
+    NewUser,
+    Claims,
+    ResetPasswordRequest,
+    PasswordResetToken,
+    ResetData,
+    ResetResponse,
+    Message
+};
+/// To send email
+use crate::services::enqueue_email;
 
 #[derive(Deserialize)]
 struct LoginRequest {
@@ -113,6 +125,175 @@ async fn login(
     Ok(Json(LoginResponse { token }))
 }
 
+
+/// https://github.com/sfackler/rust-postgres/blob/master/tokio-postgres/src/error/sqlstate.rs
+#[post("/register", data = "<request_data>")]
+async fn register(
+    pool: &State<PgPool>,
+    request_data: Json<NewUser>
+) -> Result<Json<User>, Status> {
+    // Hash user password using bcrypt
+    let password_hash = hash(&request_data.password, DEFAULT_COST)
+        .map_err(|_| { Status::InternalServerError })?;
+
+    // Try to create a user
+    let user = sqlx::query_as::<_, User>(
+        "INSERT INTO users (username, email, password_hash)
+             VALUES ($1, $2, $3)
+             RETURNING id, username, email, password_hash, created_at"
+    ).bind(&request_data.username)
+        .bind(&request_data.email)
+        .bind(&password_hash)
+        .fetch_one(pool.inner())
+        .await
+        .map_err(|e| {
+            eprintln!("Database error: {:?}", e); // Log occurred error
+            match e {
+                sqlx::Error::Database(db_err) if db_err.code() == Some("23505".into()) => {
+                    Status::Conflict // Unique violation
+                }
+                _ => Status::InternalServerError
+            }
+        })?;
+
+    Ok(Json(user))
+}
+
+
+/// Request to reset password. Mail the reset token to the user email.
+/// Also create a new token in the database.
+/// Body:
+/// - `email`: email of the user
+#[post("/password/reset-request", data = "<request_data>")]
+async fn request_to_reset_password(
+    pool: &State<PgPool>,
+    request_data: Json<ResetPasswordRequest>
+) -> Result<Json<Message>, Status> {
+    // Try to find user by email
+    let user = sqlx::query!(
+        "SELECT id FROM users WHERE email = $1",
+        request_data.email
+    )
+    .fetch_optional(pool.inner())
+    .await
+    .map_err(|_| Status::InternalServerError)?;
+
+    if let Some(user) = user {
+        // Remove any existing reset tokens for the user, to avoid duplicates
+        sqlx::query!(
+            "DELETE FROM password_reset_tokens WHERE user_id = $1",
+            user.id
+        )
+        .execute(pool.inner())
+        .await
+        .map_err(|_| Status::InternalServerError)?;
+
+        // `new_v4` - optimized method for generating random UUIDs
+        let reset_token = Uuid::new_v4().to_string();
+        let expiration_date = Utc::now() + Duration::hours(1);
+
+        // Save token to database
+        sqlx::query(
+            "INSERT INTO password_reset_tokens (user_id, reset_token, expiration_date)
+         VALUES ($1, $2, $3)"
+        )
+        .bind(user.id)
+        .bind(&reset_token)
+        .bind(expiration_date)
+        .execute(pool.inner())
+        .await
+        .map_err(|e| {
+            eprintln!("Database error: {:?}", e);
+            Status::InternalServerError
+        })?;
+
+        let smtp_username = env::var("SMTP_USERNAME").expect("SMTP_USERNAME must be set");
+        // Clone email to allow move it to the async block
+        let recipient_email = request_data.email.clone();
+        // Param:
+        // - `smtp_username`: Sender email
+        // - `request_data.email`: Recipient email
+        // - `reset_token`: Reset token to reset password
+        enqueue_email(smtp_username, recipient_email, reset_token).await;
+
+        Ok(Json(Message {
+            content: "Password reset email sent.".to_string(),
+        }))
+    } else {
+        Err(Status::NotFound)
+    }
+}
+
+
+/// Reset user password using reset token.
+/// Body:
+/// - `reset_token`: reset token
+/// - `new_password`: new password
+/// - `email`: email of the user
+#[post("/password/reset", data = "<request_data>")]
+pub async fn reset_password(
+    pool: &State<PgPool>,
+    request_data: Json<ResetData>
+) -> Result<Json<ResetResponse>, Status> {
+    // Retrieve token from database
+    let reset_record = sqlx::query_as::<_, PasswordResetToken>(
+        "SELECT id, user_id, reset_token, expiration_date, created_at
+         FROM password_reset_tokens WHERE reset_token = $1"
+    )
+    .bind(&request_data.reset_token)
+    .fetch_optional(pool.inner())
+    .await
+    .map_err(|e| {
+        eprintln!("Database error: {:?}", e);
+        Status::InternalServerError
+    })?;
+
+    if let Some(token) = reset_record {
+        // Check token for expiration
+        if token.expiration_date < Utc::now().naive_utc() {
+            return Err(Status::BadRequest);
+        }
+
+        // Token is valid, then update user password.
+        // First, hash user password
+        let hashed_password = hash(&request_data.new_password, DEFAULT_COST)
+            .map_err(|_| Status::InternalServerError)?;
+
+        // Update user password in database
+        sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
+            .bind(&hashed_password)
+            .bind(token.user_id)
+            .execute(pool.inner())
+            .await
+            .map_err(|e| {
+                eprintln!("Database error: {:?}", e);
+                Status::InternalServerError
+            })?;
+
+        // Delete token from database
+        sqlx::query("DELETE FROM password_reset_tokens WHERE reset_token = $1")
+            .bind(&request_data.reset_token)
+            .execute(pool.inner())
+            .await
+            .map_err(|e| {
+                eprintln!("Database error: {:?}", e);
+                Status::InternalServerError
+            })?;
+
+        Ok(Json(ResetResponse {
+            message: "Password reset successfully".to_string(),
+        }))
+    } else {
+        Err(Status::NotFound)
+    }
+}
+
+
 pub fn routes() -> Vec<rocket::Route> {
-    routes![login]
+    routes![
+        login,
+        register,
+        request_to_reset_password,
+        reset_password
+    ]
 }

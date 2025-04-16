@@ -3,25 +3,24 @@ use rocket::http::Status;
 use sqlx::PgPool;
 use rocket::State;
 
-use crate::models::{Key, KeyRequest, KeysResponse};
+use crate::models::{Key, KeyRequest, PartialKeyRequest, KeysResponse};
 use crate::routes::auth::LoggedUser;
 
+use crate::routes::users::check_user_exists;
 
 /// Get a list of keys for a specific user
-#[get("/<user_id>")]
+/// # Path Parameters:
+/// - `user_id`: id of the user
+#[get("/")]
 async fn list(
     pool: &State<PgPool>,
-    user_id: i32,
     auth: LoggedUser
 ) -> Result<Json<Vec<Key>>, Status> {
-    // Control access to the only user's keys
-    if auth.0 != user_id { return Err(Status::Forbidden); }
-
     let keys = sqlx::query_as::<_, Key>(
-        "SELECT id, key_value, key_name, key_type, key_description, created_at
+        "SELECT id, key_value, key_name, key_type, key_description, expiration_date, created_at
          FROM keys WHERE user_id = $1"
     )
-    .bind(user_id)
+    .bind(auth.0)
     .fetch_all(pool.inner())
     .await
     .map_err(|e| {
@@ -37,29 +36,35 @@ async fn list(
     Ok(Json(keys))
 }
 
+/// Create a new key
+/// Body:
+/// - `user_id`: id of the user
+/// - `key_value`: value of the key
+/// - `key_name`: name of the key
+/// - `key_type`: type of the key
+/// - Optional fields:
+/// - `key_description`: description of the key
+/// - `expiration_date`: expiration date of the key
 #[post("/", data = "<request_data>")]
 async fn create(
     pool: &State<PgPool>,
     request_data: Json<KeyRequest>,
     auth: LoggedUser
 ) -> Result<Json<KeysResponse>, Status> {
-    if auth.0 != request_data.user_id { return Err(Status::Forbidden); }
+    check_user_exists(pool.inner(), auth.0).await?;
 
-    sqlx::query_as::<_, Key>(
+    let key = sqlx::query_as::<_, Key>(
         "INSERT INTO keys (
-                  user_id,
-                  key_value,
-                  key_name,
-                  key_type,
-                  key_description
-                  ) VALUES ($1, $2, $3, $4, $5)
-                  RETURNING id, key_value, key_name, key_type, key_description, created_at"
+                  user_id, key_value, key_name, key_type, key_description, expiration_date
+                  ) VALUES ($1, $2, $3, $4, $5, $6)
+                  RETURNING id, key_value, key_name, key_type, key_description, expiration_date, created_at"
     )
-    .bind(request_data.user_id)
+    .bind(auth.0)
     .bind(&request_data.key_value)
     .bind(&request_data.key_name)
     .bind(&request_data.key_type)
     .bind(&request_data.key_description)
+    .bind(&request_data.expiration_date)
     .fetch_one(pool.inner())
     .await
     .map_err(|_| {
@@ -67,30 +72,61 @@ async fn create(
     })?;
 
     Ok(Json(KeysResponse {
-        message: "Key saved successfully".to_string()
+        message: format!("Key {} saved successfully", key.id)
     }))
 }
 
-// #[put("/<key_id>", data = "<request_data>")]
-// async fn update(key_id: String, request_data: Json<KeyRequest>) -> Json<KeysResponse> {
-//
-// }
+/// Set expiration date for a specific key
+/// # Path Parameters:
+/// - `key_id`: id of the key
+///
+/// # Body
+/// - `user_id`: id of the user
+/// - `expiration_date`: expiration date of the key
+#[patch("/<key_id>", data = "<request_data>")]
+async fn set_expiration(
+    pool: &State<PgPool>,
+    key_id: i32,
+    request_data: Json<PartialKeyRequest>,
+    auth: LoggedUser
+) -> Result<Json<KeysResponse>, Status> {
+    if let Some(expiration_date) = request_data.expiration_date {
+        let updated = sqlx::query!(
+            "UPDATE keys SET expiration_date = $1 WHERE id = $2 AND user_id = $3",
+            expiration_date,
+            key_id,
+            auth.0
+        )
+        .execute(pool.inner())
+        .await
+        .map_err(|e| {
+            eprintln!("Database error: {:?}", e);
+            Status::InternalServerError
+        })?;
 
-// #[patch("/<key_id>", data = "<request_data>")]
-// updating key values as: name, key, description...
+        if updated.rows_affected() == 0 { return Err(Status::NotFound); }
 
+        return Ok(Json(KeysResponse {
+            message: "Key expiration date updated successfully".to_string(),
+        }));
+    }
+
+    Err(Status::UnprocessableEntity)
+}
+
+/// Delete a key
+/// # Path Parameters:
+/// - `key_id`: id of the key
 #[delete("/<key_id>")]
 async fn delete(
     pool: &State<PgPool>,
     key_id: i32,
     auth: LoggedUser
 ) -> Result<Json<KeysResponse>, Status> {
-    // Control access to the only user's keys
-    if auth.0 != key_id { return Err(Status::Forbidden); }
-
     let deleted = sqlx::query!(
-        "DELETE FROM keys WHERE id = $1",
-        key_id
+        "DELETE FROM keys WHERE id = $1 AND user_id = $2",
+        key_id,
+        auth.0
     )
     .execute(pool.inner())
     .await
@@ -106,7 +142,87 @@ async fn delete(
     }))
 }
 
+/// Getting the list of expired keys for a specific user
+#[get("/expired")]
+async fn expired(
+    pool: &State<PgPool>,
+    auth: LoggedUser
+) -> Result<Json<Vec<Key>>, Status> {
+    let expired_keys = sqlx::query_as::<_, Key>(
+        "SELECT id, key_value, key_name, key_type, key_description, expiration_date, created_at
+         FROM keys
+         WHERE user_id = $1 AND expiration_date < NOW()"
+    )
+    .bind(auth.0)
+    .fetch_all(pool.inner())
+    .await
+    .map_err(|e| {
+        eprintln!("Database error: {:?}", e);
+        Status::InternalServerError
+    })?;
+
+    if expired_keys.is_empty() {
+        // Keys not found, or expiration date is not set
+        return Err(Status::NotFound);
+    }
+
+    Ok(Json(expired_keys))
+}
+
+/// Import keys from a JSON file
+/// # Body
+/// - `user_id`: id of the user
+/// - `key_value`: value of the key
+/// - `key_name`: name of the key
+/// - `key_type`: type of the key
+/// - Optional fields:
+/// - `key_description`: description of the key
+/// - `expiration_date`: expiration date of the key
+#[post("/import", data = "<request_data>")]
+async fn import(
+    pool: &State<PgPool>,
+    request_data: Json<Vec<KeyRequest>>,
+    auth: LoggedUser
+) -> Result<Json<KeysResponse>, Status> {
+    for key in request_data.iter() {
+        sqlx::query(
+            "INSERT INTO keys (
+                      user_id,
+                      key_value,
+                      key_name,
+                      key_type,
+                      key_description,
+                      expiration_date
+                      ) VALUES ($1, $2, $3, $4, $5, $6)"
+        )
+        .bind(auth.0)
+        .bind(&key.key_value)
+        .bind(&key.key_name)
+        .bind(&key.key_type)
+        .bind(&key.key_description)
+        .bind(&key.expiration_date)
+        .execute(pool.inner())
+        .await
+        .map_err(|e| {
+            eprintln!("Database error: {:?}", e);
+            Status::InternalServerError
+        })?;
+    }
+
+    Ok(Json(KeysResponse {
+        message: "Keys imported successfully".to_string()
+    }))
+}
+
+
 pub fn routes() -> Vec<rocket::Route> {
-    routes![list, create, delete]
+    // TODO: add patch method if needed, create a new method for generating or encrypting keys
+    // TODO: add return logic
+    routes![
+        list, expired, // Get keys
+        create, delete, // Creation or deletion
+        set_expiration, // Update key properties
+        import // Import keys(Post)
+    ]
 }
 
