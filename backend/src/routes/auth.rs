@@ -6,20 +6,12 @@ use rocket::{Request, State};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use jsonwebtoken::{encode, Header, EncodingKey, DecodingKey, decode, Validation};
 use chrono::{Duration, Utc};
+use garde::Validate;
 use rocket::request::{FromRequest, Outcome};
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-use crate::models::{
-    User,
-    NewUser,
-    Claims,
-    ResetPasswordRequest,
-    PasswordResetToken,
-    ResetData,
-    ResetResponse,
-    Message
-};
+use crate::models::{User, NewUser, Claims, ResetPasswordRequest, PasswordResetToken, ResetData, ResetResponse, Message, ValidateEmail, ValidatePassword, ValidateUsername};
 /// To send email
 use crate::services::enqueue_email;
 
@@ -132,6 +124,31 @@ async fn register(
     pool: &State<PgPool>,
     request_data: Json<NewUser>
 ) -> Result<Json<User>, Status> {
+    // validate email
+    if ValidateEmail::validate(
+        &ValidateEmail { email: request_data.email.clone(), }
+    ).is_err() { return Err(Status::BadRequest); }
+
+    // Check if user with given email already exists
+    let user_exists = sqlx::query(
+        "SELECT 1 FROM users WHERE email = $1"
+    )
+    .bind(&request_data.email)
+    .fetch_optional(pool.inner())
+    .await
+    .map_err(|_| { Status::InternalServerError })?;
+    if user_exists.is_some() { return Err(Status::Conflict); }// 409
+
+    // Check user password
+    if ValidatePassword::validate(
+        &ValidatePassword { password: request_data.password.to_string(), }
+    ).is_err() { return Err(Status::BadRequest); }
+
+    // Validate username
+    if ValidateUsername::validate(
+        &ValidateUsername { username: request_data.username.to_string(), }
+    ).is_err() { return Err(Status::BadRequest); }
+
     // Hash user password using bcrypt
     let password_hash = hash(&request_data.password, DEFAULT_COST)
         .map_err(|_| { Status::InternalServerError })?;

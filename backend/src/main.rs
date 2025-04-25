@@ -53,6 +53,7 @@ async fn rocket() -> _ {
         .mount("/users", users::routes())
         .mount("/keys", keys::routes())
         .mount("/status", health::routes())
+        .mount("/utils", utils::routes())
         // .mount("/docs", routes::docs::routes())
         .manage(pool)
 }

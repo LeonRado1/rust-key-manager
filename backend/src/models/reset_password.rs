@@ -11,8 +11,8 @@ pub struct ResetPasswordRequest {
 pub struct PasswordResetToken {
     pub id: i32,
     pub user_id: i32,
-    #[serde(skip)]
-    pub reset_token: String,
+    // #[serde(skip)]
+    // pub reset_token: String,
     pub expiration_date: NaiveDateTime,
     pub created_at: NaiveDateTime,
 }

@@ -4,14 +4,18 @@ use rocket::State;
 use sqlx::PgPool;
 use crate::routes::auth::LoggedUser;
 
+use garde::Validate;
+
 /// TODO:
-/// - Add password, email validation.
-/// - Implement tools for generation or encryption passwords, rotation.
-/// - Implement users management routes, delete user, etc.
+/// - Add validation.
+/// - Implement tools for generation or encryption passwords, `rotation`.
 /// - Automatically analyze of relevance of users keys
 /// - Implement protections: CSRF, brut-force, http, requests, ...
 
-use crate::models::{UpdateUserRequest, UpdateUserResponse};
+use crate::models::{
+    UpdateUserRequest, UpdateUserResponse, DeleteUserRequest,
+    ValidateEmail, ValidatePassword, ValidateUsername
+};
 
 /// Check if the user with given id exists in the database.
 pub async fn check_user_exists(pool: &PgPool, user_id: i32) -> Result<(), Status> {
@@ -47,6 +51,11 @@ async fn change_email(
             return Err(Status::BadRequest);
         }
     };
+
+    // Validate email
+    if ValidateEmail::validate(
+        &ValidateEmail { email: new_email.clone(), }
+    ).is_err() { return Err(Status::BadRequest); }
 
     // Check if the user with given gmail exists(email was taken by another user)
     let email_exists = sqlx::query(
@@ -94,29 +103,16 @@ async fn change_username(
     request_data: Json<UpdateUserRequest>,
     auth: LoggedUser
 ) -> Result<Json<UpdateUserResponse>, Status> {
+    // Check if username is provided in the request
     let new_username = match &request_data.username {
         Some(username) => username,
-        None => {
-            eprintln!("Username is required");
-            return Err(Status::BadRequest);
-        }
+        None => { return Err(Status::BadRequest); }
     };
 
-    let username_exists = sqlx::query(
-        "SELECT 1
-         FROM users
-         WHERE username = $1 AND id != $2"
-    )
-    .bind(new_username)
-    .bind(auth.0)
-    .fetch_optional(pool.inner())
-    .await
-    .map_err(|e| {
-        eprintln!("Database error: {:?}", e);
-        Status::InternalServerError
-    })?;
-
-    if username_exists.is_some() { return Err(Status::Conflict); }
+    // Validate username
+    if ValidateUsername::validate(
+        &ValidateUsername { username: new_username.to_string(), }
+    ).is_err() { return Err(Status::BadRequest); }
 
     // Update username
     let updated = sqlx::query!(
@@ -138,9 +134,110 @@ async fn change_username(
     }))
 }
 
+#[patch("/password", data = "<request_data>")]
+async fn change_password(
+    pool: &State<PgPool>,
+    request_data: Json<UpdateUserRequest>,
+    auth: LoggedUser
+) -> Result<Json<UpdateUserResponse>, Status> {
+    // Ensure new_password is provided
+    let new_password = request_data
+        .new_password
+        .as_deref()
+        .ok_or(Status::BadRequest)?;
+
+    // Ensure old_password is provided
+    let old_password = request_data
+        .old_password
+        .as_deref()
+        .ok_or(Status::BadRequest)?;
+
+    // Check new password
+    if ValidatePassword::validate(
+        &ValidatePassword { password: new_password.to_string(), }
+    ).is_err() { return Err(Status::BadRequest); }
+
+    // Retrieve old password from database
+    let old_password_hash = sqlx::query!(
+        "SELECT password_hash FROM users WHERE id = $1",
+        auth.0
+    )
+    .fetch_one(pool.inner())
+    .await
+    .map_err(|_| { Status::InternalServerError })?;
+
+    // Verify old password
+    if !bcrypt::verify(old_password, &old_password_hash.password_hash).map_err(|_| Status::InternalServerError)? {
+        return Err(Status::Unauthorized);
+    }
+
+    // Hash new password
+    let hashed_password = bcrypt::hash(new_password, bcrypt::DEFAULT_COST).map_err(|_| Status::InternalServerError)?;
+
+    // Save new password in database
+    let updated = sqlx::query!(
+        "UPDATE users SET password_hash = $1 WHERE id = $2",
+        hashed_password,
+        auth.0
+    )
+    .execute(pool.inner())
+    .await
+    .map_err(|_| { Status::InternalServerError })?;
+
+    if updated.rows_affected() == 0 { return Err(Status::NotFound); }
+    Ok(Json(UpdateUserResponse {
+        message: "Password updated successfully".to_string(),
+    }))
+}
+
+#[delete("/account", data = "<request_data>")]
+async fn delete_user_account(
+    pool: &State<PgPool>,
+    request_data: Json<DeleteUserRequest>,
+    auth: LoggedUser
+) -> Result<Json<UpdateUserResponse>, Status> {
+    let password = &request_data.password;
+
+    // Validate password
+    if ValidatePassword::validate(
+        &ValidatePassword { password: password.to_string(), }
+    ).is_err() { return Err(Status::BadRequest); }
+
+    // Retrieve password from database
+    let password_hash = sqlx::query!(
+        "SELECT password_hash FROM users WHERE id = $1",
+        auth.0
+    )
+    .fetch_one(pool.inner())
+    .await
+    .map_err(|_| { Status::InternalServerError })?;
+
+    // Verify old password
+    if !bcrypt::verify(password, &password_hash.password_hash).map_err(|_| Status::InternalServerError)? {
+        return Err(Status::Unauthorized);
+    }
+
+    // Delete user from the database
+    let deleted = sqlx::query!(
+        "DELETE FROM users WHERE id = $1",
+        auth.0
+    )
+    .execute(pool.inner())
+    .await
+    .map_err(|_| Status::InternalServerError)?;
+
+    if deleted.rows_affected() == 0 { return Err(Status::NotFound); }
+
+    Ok(Json(UpdateUserResponse {
+        message: "User account deleted successfully".to_string(),
+    }))
+}
+
 pub fn routes() -> Vec<rocket::Route> {
     routes![
         change_email,
-        change_username
+        change_username,
+        change_password,
+        delete_user_account
     ]
 }

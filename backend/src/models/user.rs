@@ -23,7 +23,14 @@ pub struct NewUser {
 #[derive(Deserialize)]
 pub struct UpdateUserRequest {
     pub username: Option<String>,
-    pub email: Option<String>
+    pub email: Option<String>,
+    pub new_password: Option<String>,
+    pub old_password: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct DeleteUserRequest {
+    pub password: String,
 }
 
 #[derive(Serialize)]
