@@ -1,34 +1,40 @@
 use yew::prelude::*;
+use yew_router::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlInputElement;
 use regex::Regex;
-use log::info;
 
+use crate::components::app_router::Route;
 use crate::services::auth;
-use crate::models::user;
+use crate::models::user::RegisterRequest;
+use crate::context::user_context::use_user_context;
+use crate::helpers::storage;
 
-#[function_component(Signup)]
-pub fn signup() -> Html {
-    let email_address = use_state(|| String::new());
+#[function_component(Register)]
+pub fn register() -> Html {
     let username = use_state(|| String::new());
+    let email_address = use_state(|| String::new());
     let password = use_state(|| String::new());
     let confirm_password = use_state(|| String::new());
 
     let error_message = use_state(|| String::new());
 
-    let oninput_email_address = {
-        let email_address = email_address.clone();
-        Callback::from(move |e: InputEvent| {
-            let input: HtmlInputElement = e.target_unchecked_into();
-            email_address.set(input.value());
-        })
-    };
+    let user_ctx = use_user_context();
+    let navigator = use_navigator().unwrap();
 
     let oninput_username = {
         let username = username.clone();
         Callback::from(move |e: InputEvent| {
             let input: HtmlInputElement = e.target_unchecked_into();
             username.set(input.value());
+        })
+    };
+
+    let oninput_email_address = {
+        let email_address = email_address.clone();
+        Callback::from(move |e: InputEvent| {
+            let input: HtmlInputElement = e.target_unchecked_into();
+            email_address.set(input.value());
         })
     };
 
@@ -64,14 +70,17 @@ pub fn signup() -> Html {
         }
     }
 
-    let on_signup = {
-        let email_address = email_address.clone();
+    let on_register = {
         let username = username.clone();
+        let email_address = email_address.clone();
         let password = password.clone();
         let confirm_password = confirm_password.clone();
 
         let error_message = error_message.clone();
-        
+
+        let user_ctx = user_ctx.clone();
+        let navigator = navigator.clone();
+
         Callback::from(move |_e: MouseEvent| {
             if !(*error_message).is_empty() {
                 error_message.set(String::new());
@@ -87,7 +96,7 @@ pub fn signup() -> Html {
                 return;
             }
 
-            let new_user = user::SignupRequest {
+            let new_user = RegisterRequest {
                 username: (*username).clone(),
                 email: (*email_address).clone(),
                 password: (*password).clone()
@@ -95,13 +104,21 @@ pub fn signup() -> Html {
 
             let error_message = error_message.clone();
 
+            let user_ctx = user_ctx.clone();
+            let navigator = navigator.clone();
+
             spawn_local(async move {
-                match auth::signup(new_user).await {
+                match auth::register(new_user).await {
                     Ok(response) => {
-                        info!("{:?}", response);
+                        if let Ok(_) = storage::save_token(&response.token) {
+                            user_ctx.set_user.emit(Some(response.user));
+                            navigator.push(&Route::Home);
+                        } else {
+                            error_message.set("Failed to save authentication token".to_string());
+                        }
                     }
                     Err(err) => {
-                        error_message.set(format!("Signup failed: {}", err));
+                        error_message.set(format!("Register failed: {}", err));
                     }
                 }
             });
@@ -110,8 +127,18 @@ pub fn signup() -> Html {
 
     html! {
         <div class="col-lg-4 mx-auto">
-            <h2 class="text-center mb-3">{ "Signup" }</h2>
+            <h2 class="text-center mb-3">{ "Register" }</h2>
             <form>
+                <div class="mb-3">
+                    <label class="form-label" for="username">{ "Username" }</label>
+                    <input
+                        id="username"
+                        type="text"
+                        class="form-control"
+                        value={(*username).clone()}
+                        oninput={oninput_username}
+                    />
+                </div>
                 <div class="mb-3">
                     <label class="form-label" for="email">{ "Email" }</label>
                     <input
@@ -121,16 +148,6 @@ pub fn signup() -> Html {
                         required={true}
                         value={(*email_address).clone()}
                         oninput={oninput_email_address}
-                    />
-                </div>
-                <div class="mb-3">
-                    <label class="form-label" for="username">{ "Username" }</label>
-                    <input
-                        id="username"
-                        type="text"
-                        class="form-control"
-                        value={(*username).clone()}
-                        oninput={oninput_username}
                     />
                 </div>
                 <div class="mb-3">
@@ -155,13 +172,13 @@ pub fn signup() -> Html {
                 </div>
                 <div class="text-center">
                     <button
-                        class="btn btn-success mx-auto"
+                        class="btn btn-outline-success mx-auto"
                         type="button"
                         disabled={is_invalid}
-                        onclick={on_signup}
+                        onclick={on_register}
                     >
-                        <i class="bi bi-person-add me-1"></i>
-                        { "Signup" }
+                        <i class="bi bi-person-plus me-1"></i>
+                        { "Register" }
                     </button>
                 </div>
                 if !error_message.is_empty() {

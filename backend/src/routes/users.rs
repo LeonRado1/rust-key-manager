@@ -66,11 +66,11 @@ async fn change_email(
     if email_exists.is_some() { return Err(Status::Conflict); }
 
    // Update email
-    let updated = sqlx::query!(
-        "UPDATE users SET email = $1 WHERE id = $2",
-        new_email,
-        auth.0
+    let updated = sqlx::query(
+        "UPDATE users SET email = $1 WHERE id = $2"
     )
+    .bind(new_email)
+    .bind(auth.0)
     .execute(pool.inner())
     .await
     .map_err(|e| {
@@ -119,11 +119,11 @@ async fn change_username(
     if username_exists.is_some() { return Err(Status::Conflict); }
 
     // Update username
-    let updated = sqlx::query!(
-        "UPDATE users SET username = $1 WHERE id = $2",
-        new_username,
-        auth.0
+    let updated = sqlx::query(
+        "UPDATE users SET username = $1 WHERE id = $2"
     )
+    .bind(new_username)
+    .bind(auth.0)
     .execute(pool.inner())
     .await
     .map_err(|e| {

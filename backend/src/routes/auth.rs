@@ -1,5 +1,6 @@
 use std::env;
-use sqlx::PgPool;
+use lettre::transport::smtp::commands::Auth;
+use sqlx::{PgPool, Row};
 use rocket::serde::json::Json;
 use rocket::http::Status;
 use rocket::{Request, State};
@@ -11,36 +12,14 @@ use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
 use crate::models::{
-    User,
-    NewUser,
-    Claims,
-    ResetPasswordRequest,
-    PasswordResetToken,
-    ResetData,
-    ResetResponse,
-    Message
+    AuthResponse, RegisterRequest, LoginRequest, Claims, Message, PasswordResetToken, ResetData, ResetPasswordRequest, ResetResponse, User
 };
 /// To send email
 use crate::services::enqueue_email;
 
-#[derive(Deserialize)]
-struct LoginRequest {
-    email: String,
-    password: String,
-}
-
-#[derive(Serialize)]
-struct LoginResponse {
-    token: String,
-}
 
 pub struct LoggedUser(pub i32);
 
-/// https://github.com/dani-garcia/vaultwarden/blob/025bb90f8f7d4f84e8e78d14be7314ac2ab3a2fc/src/error.rs#L295
-/// https://github.com/dani-garcia/vaultwarden/blob/main/src/auth.rs
-/// https://github.com/dani-garcia/vaultwarden/blob/main/src/api/core/public.rs
-/// Check Outcome and from_request from from_request.rs.
-/// Validate JWT token
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for LoggedUser {
     type Error = &'static str;
@@ -53,115 +32,169 @@ impl<'r> FromRequest<'r> for LoggedUser {
 
         let auth_header = request.headers().get_one("Authorization");
         let access_token = match auth_header {
-            Some(header) if header.starts_with("Bearer ") => &header[7..], // Extract token
+            Some(header) if header.starts_with("Bearer ") => &header[7..],
             Some(_) => return Outcome::Error((Status::BadRequest,  "Invalid Authorization header format")),
             _ => {
                 return Outcome::Error((Status::Unauthorized, "Authorization header not found"));
             }
         };
 
-        match validate_jwt(access_token, &jwt_secret).await {
-            Ok(claims) => Outcome::Success(LoggedUser(claims.sub)),
+        match validate_jwt_token(access_token, &jwt_secret) {
+            Ok(claims) => {
+                let user_id = match claims.sub.parse::<i32>() {
+                    Ok(id) => id,
+                    Err(_) => return Outcome::Error((Status::Unauthorized, "Invalid or expired token")),
+                };
+
+                Outcome::Success(LoggedUser(user_id))
+            }
             Err(_) => Outcome::Error((Status::Unauthorized, "Invalid or expired token")),
         }
     }
 }
 
-pub async fn validate_jwt(token: &str, secret: &str) -> Result<Claims, Status> {
+fn validate_jwt_token(token: &str, secret: &str) -> Result<Claims, Status> {
     let decoding_key = DecodingKey::from_secret(secret.as_ref());
     let token_data = decode::<Claims>(token, &decoding_key, &Validation::default())
-        .map_err(|e| {
-            #[cfg(debug_assertions)]
-            eprintln!("JWT decoding failed: {:?}", e);
-            Status::Unauthorized
-        })?;
+        .map_err(|_| Status::Unauthorized)?;
 
     if token_data.claims.exp < Utc::now().timestamp() as usize {
-        #[cfg(debug_assertions)]
-        eprintln!("JWT has expired");
         return Err(Status::Unauthorized);
     }
+    
     Ok(token_data.claims)
 }
 
-/// Source:
-/// https://github.com/fastly/pushpin/blob/main/src/core/jwt.rs
-/// https://github.com/MaterializeInc/materialize/blob/main/src/frontegg-mock/src/utils.rs
-/// Login user and return JWT token
-#[post("/login", data = "<login_data>")]
-async fn login(
-    pool: &State<PgPool>,
-    login_data: Json<LoginRequest>
-) -> Result<Json<LoginResponse>, Status> {
-    // Get user data by email
-    let user = sqlx::query_as::<_, User>(
-        "SELECT id, username, email, password_hash, created_at FROM users WHERE email = $1"
-    )
-    .bind(&login_data.email)
-    .fetch_one(pool.inner())
-    .await
-    .map_err(|_| Status::Unauthorized)?; // 401
-
-    // Validate password
-    let is_valid_password = verify(&login_data.password, &user.password_hash)
-        .map_err(|_| Status::InternalServerError)?;
-    if !is_valid_password { return Err(Status::Unauthorized); }
-
-    // Generate JWT token
+fn generate_jwt_token(user_id: i32) -> Result<String, Status> {
     let expiration = Utc::now()
         .checked_add_signed(Duration::hours(6))
         .expect("valid timestamp")
         .timestamp() as usize;
 
+    let claims = Claims {
+        sub: format!("{}", user_id),
+        exp: expiration,
+    };
+
+    let secret = env::var("JWT_SECRET").expect("JWT_SECRET not set");
+
     let token = encode(
-        &Header::default(), // Use default algorithm
-        &Claims {
-            sub: user.id,
-            exp: expiration
-        },// Secret key
-        &EncodingKey::from_secret(env::var("JWT_SECRET").expect("JWT_SECRET not set").as_ref())
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_bytes()),
     ).map_err(|_| Status::InternalServerError)?;
 
-    Ok(Json(LoginResponse { token }))
+    Ok(token)
 }
 
+#[post("/login", data = "<request_data>")]
+async fn login(
+    pool: &State<PgPool>,
+    request_data: Json<LoginRequest>
+) -> Result<Json<AuthResponse>, Status> {
+    let record = sqlx::query(
+        "SELECT id, username, password_hash, email FROM users WHERE email = $1"
+    )
+    .bind(&request_data.email)
+    .fetch_one(pool.inner())
+    .await
+    .map_err(|_| Status::Unauthorized)?;
 
-/// https://github.com/sfackler/rust-postgres/blob/master/tokio-postgres/src/error/sqlstate.rs
+    let is_valid_password = verify(&request_data.password, record.get("password_hash"))
+        .map_err(|_| Status::InternalServerError)?;
+    
+    if !is_valid_password { 
+        return Err(Status::Unauthorized); 
+    }
+
+    let token = generate_jwt_token(record.get("id"))
+        .map_err(|_| Status::InternalServerError)?;
+
+    let user = User {
+        id: record.get("id"),
+        username: record.get("username"),
+        email: record.get("email"),
+    };
+    Ok(Json(AuthResponse {
+        user,
+        token
+    }))
+}
+
 #[post("/register", data = "<request_data>")]
 async fn register(
     pool: &State<PgPool>,
-    request_data: Json<NewUser>
-) -> Result<Json<User>, Status> {
-    // Hash user password using bcrypt
+    request_data: Json<RegisterRequest>
+) -> Result<Json<AuthResponse>, Status> {
+
     let password_hash = hash(&request_data.password, DEFAULT_COST)
         .map_err(|_| { Status::InternalServerError })?;
 
-    // Try to create a user
-    let user = sqlx::query_as::<_, User>(
-        "INSERT INTO users (username, email, password_hash)
-             VALUES ($1, $2, $3)
-             RETURNING id, username, email, password_hash, created_at"
-    ).bind(&request_data.username)
-        .bind(&request_data.email)
-        .bind(&password_hash)
-        .fetch_one(pool.inner())
-        .await
-        .map_err(|e| {
-            eprintln!("Database error: {:?}", e); // Log occurred error
-            match e {
-                sqlx::Error::Database(db_err) if db_err.code() == Some("23505".into()) => {
-                    Status::Conflict // Unique violation
-                }
-                _ => Status::InternalServerError
+    let record = sqlx::query(
+        "
+        INSERT INTO users (username, email, password_hash)
+        VALUES ($1, $2, $3)
+        RETURNING id, username, email
+        "
+    )
+    .bind(&request_data.username)
+    .bind(&request_data.email)
+    .bind(&password_hash)
+    .fetch_one(pool.inner())
+    .await
+    .map_err(|e| {
+        match e {
+            sqlx::Error::Database(db_err) if db_err.code() == Some("23505".into()) => {
+                Status::Conflict
             }
-        })?;
+            _ => Status::InternalServerError
+        }
+    })?;
 
-    Ok(Json(user))
+    let token = generate_jwt_token(record.get("id"))
+        .map_err(|_| Status::InternalServerError)?;
+    let username: String = record.get("username");
+
+    let user = User {
+        id: record.get("id"),
+        username: record.get("username"),
+        email: record.get("email"),
+    };
+    Ok(Json(AuthResponse {
+        user,
+        token
+    }))
 }
 
+#[get("/currentUser")]
+async fn get_current_user(
+    pool: &State<PgPool>,
+    auth: LoggedUser
+) -> Result<Json<AuthResponse>, Status> {
+    let record = sqlx::query(
+        "SELECT id, username, email FROM users WHERE id = $1"
+    )
+    .bind(auth.0)
+    .fetch_one(pool.inner())
+    .await
+    .map_err(|_| Status::InternalServerError)?;
+
+    let token = generate_jwt_token(record.get("id"))
+        .map_err(|_| Status::InternalServerError)?;
+
+    let user = User {
+        id: record.get("id"),
+        username: record.get("username"),
+        email: record.get("email"),
+    };
+    Ok(Json(AuthResponse {
+        user,
+        token
+    }))
+}
 
 /// Request to reset password. Mail the reset token to the user email.
-/// Also create a new token in the database.
+/// Also, create a new token in the database.
 /// Body:
 /// - `email`: email of the user
 #[post("/password/reset-request", data = "<request_data>")]
@@ -170,20 +203,21 @@ async fn request_to_reset_password(
     request_data: Json<ResetPasswordRequest>
 ) -> Result<Json<Message>, Status> {
     // Try to find user by email
-    let user = sqlx::query!(
-        "SELECT id FROM users WHERE email = $1",
-        request_data.email
+    let user = sqlx::query(
+        "SELECT id FROM users WHERE email = $1"
     )
+    .bind(&request_data.email)
     .fetch_optional(pool.inner())
     .await
     .map_err(|_| Status::InternalServerError)?;
 
-    if let Some(user) = user {
+    if let Some(row) = user {
+        let user_id: i32 = row.get("id");
         // Remove any existing reset tokens for the user, to avoid duplicates
-        sqlx::query!(
-            "DELETE FROM password_reset_tokens WHERE user_id = $1",
-            user.id
+        sqlx::query(
+            "DELETE FROM password_reset_tokens WHERE user_id = $1"
         )
+        .bind(user_id)
         .execute(pool.inner())
         .await
         .map_err(|_| Status::InternalServerError)?;
@@ -197,7 +231,7 @@ async fn request_to_reset_password(
             "INSERT INTO password_reset_tokens (user_id, reset_token, expiration_date)
          VALUES ($1, $2, $3)"
         )
-        .bind(user.id)
+        .bind(user_id)
         .bind(&reset_token)
         .bind(expiration_date)
         .execute(pool.inner())
@@ -293,6 +327,7 @@ pub fn routes() -> Vec<rocket::Route> {
     routes![
         login,
         register,
+        get_current_user,
         request_to_reset_password,
         reset_password
     ]

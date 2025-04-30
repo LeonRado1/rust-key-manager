@@ -5,6 +5,8 @@ use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use std::env;
+use rocket::http::Method;
+use rocket_cors::{AllowedOrigins, CorsOptions, AllowedHeaders};
 
 mod models;
 mod routes;
@@ -45,9 +47,23 @@ async fn rocket() -> _ {
     // Create a connection pool to the database
     let pool = create_db_pool(&database_url);
 
+    let cors = CorsOptions {
+        allowed_origins: AllowedOrigins::all(), // You can restrict this later
+        allowed_methods: vec![Method::Get, Method::Post, Method::Options]
+            .into_iter()
+            .map(From::from)
+            .collect(),
+        allowed_headers: AllowedHeaders::some(&["Authorization", "Accept", "Content-Type"]),
+        allow_credentials: true,
+        ..Default::default()
+    }
+    .to_cors()
+    .expect("error creating CORS fairing");
+
     // Initialize Rocket and routes
     rocket::build()
         .attach(rocket::shield::Shield::default()) // Mechanism for configuring HTTP security headers
+        .attach(cors)
         .mount("/", routes![index])
         .mount("/auth", auth::routes())
         .mount("/users", users::routes())

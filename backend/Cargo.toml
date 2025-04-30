@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 tokio = { version = "1.28.0", features = ["full"] }
 rocket = { version = "0.5.1", features = ["json"] }
+rocket_cors = "0.6"
 serde = { version = "1.0.156", features = ["derive"] }
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "macros", "time", "chrono"] }
 dotenv = "0.15.0"

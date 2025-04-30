@@ -3,18 +3,15 @@ use serde::{Serialize, Deserialize};
 use chrono::NaiveDateTime;
 use sqlx::FromRow;
 
-#[derive(Serialize, FromRow)]
+#[derive(Serialize, Deserialize, FromRow)]
 pub struct User {
     pub id: i32,
     pub username: String,
-    pub email: String,
-    #[serde(skip)] // Skip it for serialization
-    pub password_hash: String,
-    pub created_at: NaiveDateTime
+    pub email: String
 }
 
 #[derive(Deserialize)]
-pub struct NewUser {
+pub struct RegisterRequest {
     pub username: String,
     pub email: String,
     pub password: String
@@ -29,4 +26,21 @@ pub struct UpdateUserRequest {
 #[derive(Serialize)]
 pub struct UpdateUserResponse {
     pub message: String,
+}
+
+#[derive(Serialize, Deserialize, FromRow)]
+pub struct AuthResponse {
+    pub user: User,
+    pub token: String,
+}
+
+#[derive(Deserialize)]
+pub struct LoginRequest {
+    pub email: String,
+    pub password: String
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Token {
+    pub token: String
 }

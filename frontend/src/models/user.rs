@@ -1,7 +1,7 @@
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize)]
-pub struct SignupRequest {
+pub struct RegisterRequest {
     pub username: String,
     pub email: String,
     pub password: String
@@ -13,8 +13,7 @@ pub struct LoginRequest {
     pub password: String
 }
 
-#[derive(Debug)]
-#[derive(Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct User {
     pub id: i32,
     pub username: String,
@@ -22,8 +21,8 @@ pub struct User {
 }
 
 #[derive(Debug)]
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct AuthResponse {
     pub user: User,
-    pub token: String
+    pub token: String,
 }

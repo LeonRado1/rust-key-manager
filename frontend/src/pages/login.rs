@@ -2,10 +2,13 @@ use yew::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlInputElement;
 use regex::Regex;
-use log::info;
+use yew_router::hooks::use_navigator;
 
+use crate::components::app_router::Route;
+use crate::context::user_context::use_user_context;
+use crate::helpers::storage;
 use crate::services::auth;
-use crate::models::user;
+use crate::models::user::LoginRequest;
 
 #[function_component(Login)]
 pub fn login() -> Html {
@@ -13,6 +16,9 @@ pub fn login() -> Html {
     let password = use_state(|| String::new());
 
     let error_message = use_state(|| String::new());
+
+    let user_ctx = use_user_context();
+    let navigator = use_navigator().unwrap();
 
     let oninput_email_address = {
         let email_address = email_address.clone();
@@ -45,6 +51,9 @@ pub fn login() -> Html {
         let password = password.clone();
 
         let error_message = error_message.clone();
+
+        let user_ctx = user_ctx.clone();
+        let navigator = navigator.clone();
         
         Callback::from(move |_e: MouseEvent| {
             if !(*error_message).is_empty() {
@@ -52,21 +61,29 @@ pub fn login() -> Html {
             }
 
             if !is_email_valid(&email_address) {
-                error_message.set("Invalid email format.".to_string());
+                error_message.set("Invalid email format".to_string());
                 return;
             }
 
-            let user = user::LoginRequest {
+            let user = LoginRequest {
                 email: (*email_address).clone(),
                 password: (*password).clone()
             };
 
             let error_message = error_message.clone();
+
+            let user_ctx = user_ctx.clone();
+            let navigator = navigator.clone();
             
             spawn_local(async move {
                 match auth::login(user).await {
                     Ok(response) => {
-                        info!("{:?}", response);
+                        if let Ok(_) = storage::save_token(&response.token) {
+                            user_ctx.set_user.emit(Some(response.user));
+                            navigator.push(&Route::Home);
+                        } else {
+                            error_message.set("Failed to save authentication token".to_string());
+                        }
                     }
                     Err(err) => {
                         error_message.set(format!("Login failed: {}", err));
@@ -103,12 +120,12 @@ pub fn login() -> Html {
                 </div>
                 <div class="text-center">
                     <button
-                        class="btn btn-success mx-auto"
+                        class="btn btn-outline-success mx-auto"
                         type="button"
                         disabled={is_invalid}
                         onclick={on_login}
                     >
-                        <i class="bi bi-person-check me-1"></i>
+                        <i class="bi bi-box-arrow-in-right me-1"></i>
                         { "Login" }
                     </button>
                 </div>
