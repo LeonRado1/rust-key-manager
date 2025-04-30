@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::models::{User, NewUser, Claims, ResetPasswordRequest, PasswordResetToken, ResetData, ResetResponse, Message, ValidateEmail, ValidatePassword, ValidateUsername};
 /// To send email
-use crate::services::enqueue_email;
+use crate::services::enqueue_email_reset_password;
 
 #[derive(Deserialize)]
 struct LoginRequest {
@@ -231,7 +231,7 @@ async fn request_to_reset_password(
         // - `smtp_username`: Sender email
         // - `request_data.email`: Recipient email
         // - `reset_token`: Reset token to reset password
-        enqueue_email(smtp_username, recipient_email, reset_token).await;
+        enqueue_email_reset_password(smtp_username, recipient_email, reset_token).await;
 
         Ok(Json(Message {
             content: "Password reset email sent.".to_string(),
@@ -296,6 +296,22 @@ pub async fn reset_password(
                 eprintln!("Database error: {:?}", e);
                 Status::InternalServerError
             })?;
+
+        // Create notification in db system
+        sqlx::query("INSERT INTO notifications (
+           user_id,
+           notification_type,
+           message
+        ) VALUES ($1, $2)")
+        .bind(token.user_id)
+        .bind("password_reset")
+        .bind("Password reset successfully")
+        .execute(pool.inner())
+        .await
+        .map_err(|e| {
+            eprintln!("Database error: {:?}", e);
+            Status::InternalServerError
+        })?;
 
         Ok(Json(ResetResponse {
             message: "Password reset successfully".to_string(),

@@ -20,5 +20,10 @@ ring = "0.17.14"
 lettre = "0.11.15"# For sending email, to reset password
 once_cell = "1.21.3"
 
-rand = "0.8.0"
-garde = { version = "0.22", features = ["derive", "email", "regex"] }
+rand = "0.8.0" # For generating random passwords, tokens, etc.
+garde = { version = "0.22", features = ["derive", "email", "regex"] } # For validation
+
+tokio-cron-scheduler = "0.13.0" # For scheduling tasks
+
+
+

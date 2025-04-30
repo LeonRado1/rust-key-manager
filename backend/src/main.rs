@@ -36,6 +36,7 @@ async fn rocket() -> _ {
     dotenv::dotenv().ok();
 
     // Initialize the email service to process email requests
+    init_email_reset_password_service();
     init_email_service();
     // Use enqueue_email to send emails
 
@@ -44,6 +45,12 @@ async fn rocket() -> _ {
 
     // Create a connection pool to the database
     let pool = create_db_pool(&database_url);
+
+    // check_key_relevance(&pool).await.unwrap();
+    // Check key relevance and send emails if needed
+    if let Err(e) = check_keys_relevance(&pool).await {
+        eprintln!("Error checking key relevance: {:?}", e);
+    }
 
     // Initialize Rocket and routes
     rocket::build()

@@ -29,3 +29,24 @@ CREATE TABLE keys (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    notification_type VARCHAR(50) NOT NULL
+        CHECK (notification_type IN (
+             'key_expiration',
+             'password_reset',
+             'key_rotation', -- todo
+             'backup_completed', -- todo
+             'backup_failed', -- todo
+             'information' -- todo
+        )),
+    delivery_method VARCHAR(50) DEFAULT 'email'
+        CHECK (delivery_method IN (
+             'email',
+             'in_app'
+        )),
+    message TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

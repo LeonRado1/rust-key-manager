@@ -18,7 +18,7 @@ pub struct EmailRequest {
 static GLOBAL_EMAIL_QUEUE: OnceCell<Sender<EmailRequest>> = OnceCell::new();
 
 /// To add a new request to send an email in the queue
-pub async fn enqueue_email(sender: String, recipient: String, reset_password: String) {
+pub async fn enqueue_email_reset_password(sender: String, recipient: String, reset_password: String) {
     // Create a new mail request
     let mail_request = EmailRequest {
         sender,
@@ -45,7 +45,7 @@ pub async fn enqueue_email(sender: String, recipient: String, reset_password: St
 /// Was created with using Lettre examples
 /// `Lettre` is a `synchronous` email library for sending emails in Rust.
 /// Use tokio::task::spawn_blocking to run the email sending in a separate thread.
-pub fn init_email_service() {
+pub fn init_email_reset_password_service() {
     // mpsc - A multi-producer, single-consumer queue for sending values between asynchronous tasks.
     // Where `tx` - transmitter, `rx` - receiver
     // Send and receive EmailRequest structs
