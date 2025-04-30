@@ -46,6 +46,7 @@ pub fn user_context_provider(props: &ProviderProps) -> Html {
                     }
                 }
             });
+            || ()
         });
     }
 

@@ -22,6 +22,18 @@ pub fn register() -> Html {
     let user_ctx = use_user_context();
     let navigator = use_navigator().unwrap();
 
+    {
+        let user_ctx = user_ctx.clone();
+        let navigator = navigator.clone();
+
+        use_effect_with(user_ctx.clone(), move |ctx| {
+            if ctx.user.is_some() {
+                navigator.push(&Route::Dashboard);
+            }
+            || ()
+        });
+    }
+
     let oninput_username = {
         let username = username.clone();
         Callback::from(move |e: InputEvent| {
@@ -112,7 +124,7 @@ pub fn register() -> Html {
                     Ok(response) => {
                         if let Ok(_) = storage::save_token(&response.token) {
                             user_ctx.set_user.emit(Some(response.user));
-                            navigator.push(&Route::Home);
+                            navigator.push(&Route::Dashboard);
                         } else {
                             error_message.set("Failed to save authentication token".to_string());
                         }

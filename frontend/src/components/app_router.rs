@@ -9,18 +9,23 @@ use crate::helpers::storage;
 #[derive(Clone, PartialEq, Routable)]
 pub enum Route {
     #[at("/")]
-    Home,
+    Dashboard,
     #[at("/login")]
     Login,
     #[at("/register")]
     Register,
+    #[not_found]
+    #[at("/404")]
+    NotFound,
+
 }
 
 fn switch(route: Route) -> Html {
     match route {
-        Route::Home => html! { <h1>{ "Welcome to Key Manager!" }</h1> },
+        Route::Dashboard => html! { <pages::dashboard::Dashboard /> },
         Route::Login => html! { <pages::login::Login /> },
         Route::Register => html! { <pages::register::Register /> },
+        Route::NotFound => html! { <pages::not_found::NotFound /> },
     }
 }
 
