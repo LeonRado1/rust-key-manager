@@ -14,7 +14,7 @@ use crate::services::keys;
 pub fn dashboard() -> Html {
 
     let keys = use_state(Vec::<PartialKey>::new);
-    
+
     let active_filter = use_state(|| None::<i32>);
     let search_text = use_state(|| String::new());
 
@@ -59,11 +59,11 @@ pub fn dashboard() -> Html {
         })
         .filter(|key| {
             let search = (*search_text).as_str();
-            
+
             if search.is_empty() {
                 return true;
             }
-            
+
             key.key_name.to_lowercase().contains(search) ||
             key.key_description.as_ref()
                 .map_or(false, |d| d.to_lowercase().contains(search)) ||
@@ -74,7 +74,7 @@ pub fn dashboard() -> Html {
 
     let on_password_click = {
         let active_filter = active_filter.clone();
-        
+
         Callback::from(move |_e: MouseEvent| {
             active_filter.set(match *active_filter {
                 Some(PASSWORD) => None,
@@ -82,7 +82,7 @@ pub fn dashboard() -> Html {
             });
         })
     };
-    
+
     let on_token_click = {
         let active_filter = active_filter.clone();
         Callback::from(move |_e: MouseEvent| {
@@ -92,7 +92,7 @@ pub fn dashboard() -> Html {
             });
         })
     };
-    
+
     let on_api_key_click = {
         let active_filter = active_filter.clone();
         Callback::from(move |_e: MouseEvent| {
@@ -102,7 +102,7 @@ pub fn dashboard() -> Html {
             });
         })
     };
-    
+
     let on_ssh_key_click = {
         let active_filter = active_filter.clone();
         Callback::from(move |_e: MouseEvent| {
@@ -156,42 +156,41 @@ pub fn dashboard() -> Html {
             </div>
             if !keys.is_empty() {
                 <div class="d-flex align-items-center gap-5 mt-5">
-                    <input 
-                        class="form-control w-25" 
-                        type="text" 
+                    <input
+                        class="form-control w-25"
+                        type="text"
                         placeholder="Search"
                         value={(*search_text).clone()}
                         oninput={on_search_change}
                     />
                     <div class="btn-group">
-                        <button 
+                        <button
                             onclick={on_password_click}
-                            class={classes!("btn", "btn-outline-dark", 
+                            class={classes!("btn", "btn-outline-dark",
                                 (*active_filter == Some(PASSWORD)).then_some("active"))}
                         >
                             <i class="bi bi-key-fill me-1"></i>
                             {"Passwords"}
                         </button>
-                        <button 
+                        <button
                             onclick={on_token_click}
-                            class={classes!("btn", "btn-outline-dark", 
+                            class={classes!("btn", "btn-outline-dark",
                                 (*active_filter == Some(TOKEN)).then_some("active"))}
                         >
-    
-                            <i class="bi bi-currency-dollar me-1"></i>
+                            <i class="bi bi-lock-fill me-1"></i>
                             {"Tokens"}
                         </button>
-                        <button 
+                        <button
                             onclick={on_api_key_click}
-                            class={classes!("btn", "btn-outline-dark", 
+                            class={classes!("btn", "btn-outline-dark",
                                 (*active_filter == Some(API_KEY)).then_some("active"))}
                         >
                             <i class="bi bi-database-fill me-1"></i>
                             {"API Keys"}
                         </button>
-                        <button 
+                        <button
                             onclick={on_ssh_key_click}
-                            class={classes!("btn", "btn-outline-dark", 
+                            class={classes!("btn", "btn-outline-dark",
                                 (*active_filter == Some(SSH_KEY)).then_some("active"))}
                         >
                             <i class="bi bi-hdd-stack-fill me-1"></i>

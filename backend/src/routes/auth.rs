@@ -10,82 +10,10 @@ use chrono::{Duration, Utc};
 use rocket::request::{FromRequest, Outcome};
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
-
-use crate::models::{
-    AuthResponse, RegisterRequest, LoginRequest, Claims, Message, PasswordResetToken, ResetData, ResetPasswordRequest, ResetResponse, User
-};
-/// To send email
+use crate::middleware::LoggedUser;
+use crate::models::*;
 use crate::services::enqueue_email;
-
-
-pub struct LoggedUser(pub i32);
-
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for LoggedUser {
-    type Error = &'static str;
-
-    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        let jwt_secret = match env::var("JWT_SECRET") {
-            Ok(secret) => secret,
-            Err(_) => return Outcome::Error((Status::InternalServerError, "JWT_SECRET is not set"))
-        };
-
-        let auth_header = request.headers().get_one("Authorization");
-        let access_token = match auth_header {
-            Some(header) if header.starts_with("Bearer ") => &header[7..],
-            Some(_) => return Outcome::Error((Status::BadRequest,  "Invalid Authorization header format")),
-            _ => {
-                return Outcome::Error((Status::Unauthorized, "Authorization header not found"));
-            }
-        };
-
-        match validate_jwt_token(access_token, &jwt_secret) {
-            Ok(claims) => {
-                let user_id = match claims.sub.parse::<i32>() {
-                    Ok(id) => id,
-                    Err(_) => return Outcome::Error((Status::Unauthorized, "Invalid or expired token")),
-                };
-
-                Outcome::Success(LoggedUser(user_id))
-            }
-            Err(_) => Outcome::Error((Status::Unauthorized, "Invalid or expired token")),
-        }
-    }
-}
-
-fn validate_jwt_token(token: &str, secret: &str) -> Result<Claims, Status> {
-    let decoding_key = DecodingKey::from_secret(secret.as_ref());
-    let token_data = decode::<Claims>(token, &decoding_key, &Validation::default())
-        .map_err(|_| Status::Unauthorized)?;
-
-    if token_data.claims.exp < Utc::now().timestamp() as usize {
-        return Err(Status::Unauthorized);
-    }
-    
-    Ok(token_data.claims)
-}
-
-fn generate_jwt_token(user_id: i32) -> Result<String, Status> {
-    let expiration = Utc::now()
-        .checked_add_signed(Duration::hours(6))
-        .expect("valid timestamp")
-        .timestamp() as usize;
-
-    let claims = Claims {
-        sub: format!("{}", user_id),
-        exp: expiration,
-    };
-
-    let secret = env::var("JWT_SECRET").expect("JWT_SECRET not set");
-
-    let token = encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
-    ).map_err(|_| Status::InternalServerError)?;
-
-    Ok(token)
-}
+use crate::utils::jwt_token::generate_jwt_token;
 
 #[post("/login", data = "<request_data>")]
 async fn login(
@@ -154,33 +82,6 @@ async fn register(
     let token = generate_jwt_token(record.get("id"))
         .map_err(|_| Status::InternalServerError)?;
     let username: String = record.get("username");
-
-    let user = User {
-        id: record.get("id"),
-        username: record.get("username"),
-        email: record.get("email"),
-    };
-    Ok(Json(AuthResponse {
-        user,
-        token
-    }))
-}
-
-#[get("/currentUser")]
-async fn get_current_user(
-    pool: &State<PgPool>,
-    auth: LoggedUser
-) -> Result<Json<AuthResponse>, Status> {
-    let record = sqlx::query(
-        "SELECT id, username, email FROM users WHERE id = $1"
-    )
-    .bind(auth.0)
-    .fetch_one(pool.inner())
-    .await
-    .map_err(|_| Status::InternalServerError)?;
-
-    let token = generate_jwt_token(record.get("id"))
-        .map_err(|_| Status::InternalServerError)?;
 
     let user = User {
         id: record.get("id"),
@@ -327,7 +228,6 @@ pub fn routes() -> Vec<rocket::Route> {
     routes![
         login,
         register,
-        get_current_user,
         request_to_reset_password,
         reset_password
     ]

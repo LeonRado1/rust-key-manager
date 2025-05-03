@@ -1,6 +1,5 @@
 use reqwest::Client;
 use crate::models::key::PartialKey;
-use crate::models::user::AuthResponse;
 
 pub async fn get_keys(token: &str) -> Result<Vec<PartialKey>, reqwest::Error> {
     let client = Client::new();

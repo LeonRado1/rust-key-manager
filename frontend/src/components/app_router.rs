@@ -17,7 +17,6 @@ pub enum Route {
     #[not_found]
     #[at("/404")]
     NotFound,
-
 }
 
 fn switch(route: Route) -> Html {

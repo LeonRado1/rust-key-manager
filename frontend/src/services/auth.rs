@@ -1,35 +1,57 @@
 use reqwest::Client;
+use crate::helpers::error_codes::get_error_message_from_code;
 use crate::models::user::{RegisterRequest, LoginRequest, AuthResponse};
 
-pub async fn register(data: RegisterRequest) -> Result<AuthResponse, reqwest::Error> {
+pub async fn register(data: RegisterRequest) -> Result<AuthResponse, String> {
     let client = Client::new();
     let response = client.post("http://127.0.0.1:8000/auth/register")
         .json(&data)
         .send()
-        .await?;
+        .await
+        .map_err(|_e| "Error while sending request. Try again later.")?;
+
+    if let Some(error_message) = get_error_message_from_code(response.status()) {
+        return Err(error_message);
+    }
+
+    let response = response.json().await
+        .map_err(|_e| "Error while parsing response. Try again later.")?;
     
-    let response = response.json().await?;
     Ok(response)
 }
 
-pub async fn login(data: LoginRequest) -> Result<AuthResponse, reqwest::Error> { 
+pub async fn login(data: LoginRequest) -> Result<AuthResponse, String> { 
     let client = Client::new();
     let response = client.post("http://127.0.0.1:8000/auth/login")
         .json(&data)
         .send()
-        .await?;
+        .await
+        .map_err(|_e| "Error while sending request. Try again later.")?;
 
-    let response = response.json().await?;
+    if let Some(error_message) = get_error_message_from_code(response.status()) {
+        return Err(error_message);
+    }
+
+    let response = response.json().await
+        .map_err(|_e| "Error while parsing response. Try again later.")?;
+    
     Ok(response)
 }
 
-pub async fn get_current_user(token: &str) -> Result<AuthResponse, reqwest::Error> {
+pub async fn get_current_user(token: &str) -> Result<AuthResponse, String> {
     let client = Client::new();
-    let response = client.get("http://127.0.0.1:8000/auth/currentUser")
+    let response = client.get("http://127.0.0.1:8000/users/currentUser")
         .header("Authorization", format!("Bearer {}", token))
         .send()
-        .await?;
+        .await
+        .map_err(|_e| "Error while sending request. Try again later.")?;
 
-    let response = response.json().await?;
+    if let Some(error_message) = get_error_message_from_code(response.status()) {
+        return Err(error_message);
+    }
+
+    let response = response.json().await
+        .map_err(|_e| "Error while parsing response. Try again later.")?;
+    
     Ok(response)
 }

@@ -2,15 +2,11 @@ use rocket::serde::json::Json;
 use rocket::http::Status;
 use sqlx::PgPool;
 use rocket::State;
-
+use crate::middleware::LoggedUser;
 use crate::models::{Key, PartialKey, KeyRequest, PartialKeyRequest, KeysResponse};
-use crate::routes::auth::LoggedUser;
+use crate::services::{encrypt, generate_ssh_key_pair};
+use crate::utils::constants::SSH_KEY;
 
-use crate::routes::users::check_user_exists;
-
-/// Get a list of keys for a specific user
-/// # Path Parameters:
-/// - `user_id`: id of the user
 #[get("/")]
 async fn get_keys(
     pool: &State<PgPool>,
@@ -18,7 +14,7 @@ async fn get_keys(
 ) -> Result<Json<Vec<PartialKey>>, Status> {
     let keys = sqlx::query_as!(
         PartialKey,
-        "SELECT keys.id, key_name, key_description, key_type_id, key_type, key_tag, key_pair_id, expiration_date, created_at
+        "SELECT keys.id, key_name, key_description, key_type_id, key_type, key_tag, expiration_date
          FROM keys 
          JOIN key_types 
             ON key_types.id = keys.key_type_id
@@ -27,52 +23,110 @@ async fn get_keys(
     )
     .fetch_all(pool.inner())
     .await
-    .map_err(|e| {
-        eprintln!("Database error: {:?}", e);
-        Status::InternalServerError
-    })?;
+    .map_err(|_e| { Status::InternalServerError })?;
     
     Ok(Json(keys))
 }
 
-/// Create a new key
-/// Body:
-/// - `user_id`: id of the user
-/// - `key_value`: value of the key
-/// - `key_name`: name of the key
-/// - `key_type`: type of the key
-/// - Optional fields:
-/// - `key_description`: description of the key
-/// - `expiration_date`: expiration date of the key
 #[post("/", data = "<request_data>")]
-async fn create(
+async fn create_key(
     pool: &State<PgPool>,
     request_data: Json<KeyRequest>,
     auth: LoggedUser
-) -> Result<Json<KeysResponse>, Status> {
-    check_user_exists(pool.inner(), auth.0).await?;
-
-    let key = sqlx::query_as::<_, Key>(
-        "INSERT INTO keys (
-                  user_id, key_value, key_name, key_type, key_description, expiration_date
-                  ) VALUES ($1, $2, $3, $4, $5, $6)
-                  RETURNING id, key_value, key_name, key_type, key_description, expiration_date, created_at"
+) -> Result<(), Status> {
+    
+    let result = sqlx::query!(
+        "SELECT password_hash FROM users WHERE id = $1",
+        auth.0
     )
-    .bind(auth.0)
-    .bind(&request_data.key_value)
-    .bind(&request_data.key_name)
-    .bind(&request_data.key_type)
-    .bind(&request_data.key_description)
-    .bind(&request_data.expiration_date)
     .fetch_one(pool.inner())
     .await
-    .map_err(|_| {
-        Status::InternalServerError
-    })?;
+    .map_err(|_e| { Status::Unauthorized })?;
+    
+    let password_hash: String = result.password_hash;
+    
+    if request_data.key_type_id == SSH_KEY {
+        let ssh_key_pair = generate_ssh_key_pair();
+        
+        let (private_key, public_key) = match ssh_key_pair {
+            Ok(ssh_key_pair) => (ssh_key_pair.private_key, ssh_key_pair.public_key),
+            Err(e) => return Err(e)
+        };
+        
+        let encrypted_data = encrypt(&private_key, &password_hash);
 
-    Ok(Json(KeysResponse {
-        message: format!("Key {} saved successfully", key.id)
-    }))
+        match encrypted_data {
+            Ok(encrypted_data) => {
+                let private_key_id = sqlx::query!(
+                    "INSERT INTO keys (
+                        user_id, key_name, key_value, key_description, key_type_id, key_tag, expiration_date, salt, nonce
+                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                     RETURNING id",
+                    auth.0, 
+                    request_data.key_name, 
+                    encrypted_data.ciphertext, 
+                    request_data.key_description, 
+                    request_data.key_type_id,
+                    request_data.key_tag,
+                    request_data.expiration_date, 
+                    encrypted_data.salt,
+                    encrypted_data.nonce
+                )
+                .fetch_one(pool.inner())
+                .await
+                .map_err(|_e| Status::InternalServerError)?
+                .id;
+
+                sqlx::query!(
+                    "INSERT INTO keys (
+                        user_id, key_name, key_value, key_description, key_type_id, key_tag, key_pair_id, expiration_date
+                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                    auth.0, 
+                    request_data.key_name, 
+                    public_key, 
+                    request_data.key_description, 
+                    request_data.key_type_id,
+                    request_data.key_tag,
+                    private_key_id,
+                    request_data.expiration_date,
+                )
+                .execute(pool.inner())
+                .await
+                .map_err(|_e| Status::InternalServerError)?;
+
+                Ok(())
+            }
+            Err(e) => Err(e)
+        }
+    }
+    else {
+        let encrypted_data = encrypt(&(request_data.key_value), &password_hash);
+        
+        match encrypted_data {
+            Ok(encrypted_data) => {
+                sqlx::query!(
+                    "INSERT INTO keys (
+                        user_id, key_name, key_value, key_description, key_type_id, key_tag, expiration_date, salt, nonce
+                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                    auth.0, 
+                    request_data.key_name, 
+                    encrypted_data.ciphertext, 
+                    request_data.key_description, 
+                    request_data.key_type_id,
+                    request_data.key_tag,
+                    request_data.expiration_date, 
+                    encrypted_data.salt,
+                    encrypted_data.nonce
+                )
+                .execute(pool.inner())
+                .await
+                .map_err(|_e| Status::InternalServerError)?;
+                
+                Ok(())
+            }
+            Err(e) => Err(e)
+        }
+    }
 }
 
 /// Set expiration date for a specific key
@@ -168,60 +222,14 @@ async fn expired(
     Ok(Json(expired_keys))
 }
 
-/// Import keys from a JSON file
-/// # Body
-/// - `user_id`: id of the user
-/// - `key_value`: value of the key
-/// - `key_name`: name of the key
-/// - `key_type`: type of the key
-/// - Optional fields:
-/// - `key_description`: description of the key
-/// - `expiration_date`: expiration date of the key
-#[post("/import", data = "<request_data>")]
-async fn import(
-    pool: &State<PgPool>,
-    request_data: Json<Vec<KeyRequest>>,
-    auth: LoggedUser
-) -> Result<Json<KeysResponse>, Status> {
-    for key in request_data.iter() {
-        sqlx::query(
-            "INSERT INTO keys (
-                      user_id,
-                      key_value,
-                      key_name,
-                      key_type,
-                      key_description,
-                      expiration_date
-                      ) VALUES ($1, $2, $3, $4, $5, $6)"
-        )
-        .bind(auth.0)
-        .bind(&key.key_value)
-        .bind(&key.key_name)
-        .bind(&key.key_type)
-        .bind(&key.key_description)
-        .bind(&key.expiration_date)
-        .execute(pool.inner())
-        .await
-        .map_err(|e| {
-            eprintln!("Database error: {:?}", e);
-            Status::InternalServerError
-        })?;
-    }
-
-    Ok(Json(KeysResponse {
-        message: "Keys imported successfully".to_string()
-    }))
-}
-
-
 pub fn routes() -> Vec<rocket::Route> {
     // TODO: add patch method if needed, create a new method for generating or encrypting keys
     // TODO: add return logic
     routes![
         get_keys, expired, // Get keys
-        create, delete, // Creation or deletion
+        create_key, delete, // Creation or deletion
         set_expiration, // Update key properties
-        import // Import keys(Post)
+         // Import keys(Post)
     ]
 }
 

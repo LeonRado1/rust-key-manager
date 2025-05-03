@@ -1,9 +1,8 @@
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::State;
-use sqlx::PgPool;
-use crate::routes::auth::LoggedUser;
-
+use sqlx::{PgPool, Row};
+use crate::middleware::LoggedUser;
 /// TODO:
 /// - Add password, email validation.
 /// - Implement tools for generation or encryption passwords, rotation.
@@ -11,7 +10,28 @@ use crate::routes::auth::LoggedUser;
 /// - Automatically analyze of relevance of users keys
 /// - Implement protections: CSRF, brut-force, http, requests, ...
 
-use crate::models::{UpdateUserRequest, UpdateUserResponse};
+use crate::models::{AuthResponse, UpdateUserRequest, UpdateUserResponse, User};
+use crate::utils::jwt_token::generate_jwt_token;
+
+#[get("/currentUser")]
+async fn get_current_user(
+    pool: &State<PgPool>,
+    auth: LoggedUser
+) -> Result<Json<AuthResponse>, Status> {
+    let user = sqlx::query_as!(
+        User,
+        "SELECT id, username, email FROM users WHERE id = $1",
+        auth.0
+    )
+    .fetch_one(pool.inner())
+    .await
+    .map_err(|_| Status::InternalServerError)?;
+
+    let token = generate_jwt_token(user.id)
+        .map_err(|_| Status::InternalServerError)?;
+    
+    Ok(Json(AuthResponse { user, token }))
+}
 
 /// Check if the user with given id exists in the database.
 pub async fn check_user_exists(pool: &PgPool, user_id: i32) -> Result<(), Status> {
@@ -140,6 +160,7 @@ async fn change_username(
 
 pub fn routes() -> Vec<rocket::Route> {
     routes![
+        get_current_user,
         change_email,
         change_username
     ]

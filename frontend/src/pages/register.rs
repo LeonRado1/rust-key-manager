@@ -126,11 +126,11 @@ pub fn register() -> Html {
                             user_ctx.set_user.emit(Some(response.user));
                             navigator.push(&Route::Dashboard);
                         } else {
-                            error_message.set("Failed to save authentication token".to_string());
+                            error_message.set("Failed to save authentication token.".to_string());
                         }
                     }
                     Err(err) => {
-                        error_message.set(format!("Register failed: {}", err));
+                        error_message.set(err);
                     }
                 }
             });

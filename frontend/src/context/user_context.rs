@@ -64,5 +64,5 @@ pub fn user_context_provider(props: &ProviderProps) -> Html {
 
 #[hook]
 pub fn use_user_context() -> Rc<UserContext> {
-    use_context::<Rc<UserContext>>().expect("UserContext not found")
+    use_context::<Rc<UserContext>>().expect("UserContext not found.")
 }
