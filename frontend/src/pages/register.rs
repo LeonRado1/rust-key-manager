@@ -194,14 +194,8 @@ pub fn register() -> Html {
                     </button>
                 </div>
                 if !error_message.is_empty() {
-                    <div class="bg-danger mt-3 p-2">
-                        <p class="mb-1 fw-bold">
-                            <i class="bi bi-exclamation-square-fill me-1"></i>
-                            {"Error"}
-                        </p>
-                        <p class="m-0">
-                            {(*error_message).clone()}
-                        </p>
+                    <div class="alert alert-danger mt-3">
+                        {(*error_message).clone()}
                     </div>
                 }
             </form>

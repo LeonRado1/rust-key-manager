@@ -3,7 +3,7 @@ use rocket::http::Status;
 use sqlx::PgPool;
 use rocket::State;
 
-use crate::models::{Key, KeyRequest, PartialKeyRequest, KeysResponse};
+use crate::models::{Key, PartialKey, KeyRequest, PartialKeyRequest, KeysResponse};
 use crate::routes::auth::LoggedUser;
 
 use crate::routes::users::check_user_exists;
@@ -12,27 +12,26 @@ use crate::routes::users::check_user_exists;
 /// # Path Parameters:
 /// - `user_id`: id of the user
 #[get("/")]
-async fn list(
+async fn get_keys(
     pool: &State<PgPool>,
     auth: LoggedUser
-) -> Result<Json<Vec<Key>>, Status> {
-    let keys = sqlx::query_as::<_, Key>(
-        "SELECT id, key_value, key_name, key_type, key_description, expiration_date, created_at
-         FROM keys WHERE user_id = $1"
+) -> Result<Json<Vec<PartialKey>>, Status> {
+    let keys = sqlx::query_as!(
+        PartialKey,
+        "SELECT keys.id, key_name, key_description, key_type_id, key_type, key_tag, key_pair_id, expiration_date, created_at
+         FROM keys 
+         JOIN key_types 
+            ON key_types.id = keys.key_type_id
+         WHERE user_id = $1",
+        auth.0
     )
-    .bind(auth.0)
     .fetch_all(pool.inner())
     .await
     .map_err(|e| {
         eprintln!("Database error: {:?}", e);
         Status::InternalServerError
     })?;
-
-    if keys.is_empty() {
-        eprintln!("No keys found");
-        return Err(Status::NotFound);
-    }
-
+    
     Ok(Json(keys))
 }
 
@@ -91,12 +90,12 @@ async fn set_expiration(
     auth: LoggedUser
 ) -> Result<Json<KeysResponse>, Status> {
     if let Some(expiration_date) = request_data.expiration_date {
-        let updated = sqlx::query!(
-            "UPDATE keys SET expiration_date = $1 WHERE id = $2 AND user_id = $3",
-            expiration_date,
-            key_id,
-            auth.0
+        let updated = sqlx::query(
+            "UPDATE keys SET expiration_date = $1 WHERE id = $2 AND user_id = $3"
         )
+            .bind(expiration_date)
+            .bind(key_id)
+            .bind(auth.0)
         .execute(pool.inner())
         .await
         .map_err(|e| {
@@ -123,11 +122,11 @@ async fn delete(
     key_id: i32,
     auth: LoggedUser
 ) -> Result<Json<KeysResponse>, Status> {
-    let deleted = sqlx::query!(
-        "DELETE FROM keys WHERE id = $1 AND user_id = $2",
-        key_id,
-        auth.0
+    let deleted = sqlx::query(
+        "DELETE FROM keys WHERE id = $1 AND user_id = $2"
     )
+        .bind(key_id)
+        .bind(auth.0)
     .execute(pool.inner())
     .await
     .map_err(|e| {
@@ -219,7 +218,7 @@ pub fn routes() -> Vec<rocket::Route> {
     // TODO: add patch method if needed, create a new method for generating or encrypting keys
     // TODO: add return logic
     routes![
-        list, expired, // Get keys
+        get_keys, expired, // Get keys
         create, delete, // Creation or deletion
         set_expiration, // Update key properties
         import // Import keys(Post)

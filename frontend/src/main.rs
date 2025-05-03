@@ -9,6 +9,7 @@ mod models;
 mod context;
 mod helpers;
 mod components;
+mod constants;
 
 #[function_component(App)]
 fn app() -> Html {

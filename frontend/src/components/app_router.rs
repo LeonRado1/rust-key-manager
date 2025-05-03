@@ -52,7 +52,7 @@ pub fn app_router() -> Html {
             <nav class="bg-light py-2">
                 <div class="container d-flex align-items-center justify-content-between bg-light">
                     <h3 class="fs-5 m-0">{ "🔐 Key Manager" }</h3>
-                    <div class="d-flex gap-2">
+                    <div class="d-flex aling-items-center gap-2">
                         {
                             if let Some(user) = &user_ctx.user {
                                 html! {
@@ -64,6 +64,18 @@ pub fn app_router() -> Html {
                                                 <span class="fw-bold">{&user.username}</span>
                                             </span>
                                         </div>
+                                        <Link<Route> to={Route::Dashboard} classes="btn btn-outline-dark">
+                                            <i class="bi bi-bar-chart-fill me-1"></i>
+                                            { "Dashboard" }
+                                        </Link<Route>>
+                                        <Link<Route> to={Route::Register} classes="btn btn-outline-dark">
+                                            <i class="bi bi-file-earmark-plus-fill me-1"></i>
+                                            { "Add Key" }
+                                        </Link<Route>>
+                                        <Link<Route> to={Route::Register} classes="btn btn-outline-dark">
+                                            <i class="bi bi-gear-fill me-1"></i>
+                                            {"Settings"}
+                                        </Link<Route>>
                                         <button
                                             type="button"
                                             class="btn btn-outline-danger"
@@ -77,18 +89,14 @@ pub fn app_router() -> Html {
                             } else {
                                 html! {
                                     <>
-                                        <button type="button" class="btn btn-dark">
-                                            <Link<Route> to={Route::Login} classes="nav-link text-white">
-                                                <i class="bi bi-box-arrow-in-right me-1"></i>
-                                                { "Login" }
-                                            </Link<Route>>
-                                        </button>
-                                        <button type="button" class="btn btn-dark">
-                                            <Link<Route> to={Route::Register} classes="nav-link text-white">
-                                                <i class="bi bi-person-plus me-1"></i>
-                                                { "Register" }
-                                            </Link<Route>>
-                                        </button>
+                                        <Link<Route> to={Route::Login} classes="btn btn-dark">
+                                            <i class="bi bi-box-arrow-in-right me-1"></i>
+                                            { "Login" }
+                                        </Link<Route>>
+                                        <Link<Route> to={Route::Register} classes="btn btn-dark">
+                                            <i class="bi bi-person-plus me-1"></i>
+                                            { "Register" }
+                                        </Link<Route>>
                                     </>
                                 }
                             }

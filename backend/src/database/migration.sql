@@ -8,24 +8,27 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-
-CREATE TABLE password_reset_tokens (
+CREATE TABLE key_types (
     id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    reset_token TEXT NOT NULL,
-    expiration_date TIMESTAMP NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
+    key_type VARCHAR(15) NOT NULL,
+)
 
 CREATE TABLE keys (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     key_name VARCHAR(255) NOT NULL,
     key_value TEXT NOT NULL,
     key_description TEXT,
-    key_type VARCHAR(50) NOT NULL,
+    key_type_id INTEGER NOT NULL REFERENCES key_types(id),
+    key_tag VARCHAR(255),
+    key_pair_id iNTEGER REFERENCES keys(id),
     expiration_date TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE recovery_codes (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code VARCHAR(15) NOT NULL,
+    is_used BOOLEAN DEFAULT(false)
+)
