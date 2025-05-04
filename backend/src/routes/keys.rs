@@ -57,38 +57,20 @@ async fn create_key(
 
         match encrypted_data {
             Ok(encrypted_data) => {
-                let private_key_id = sqlx::query!(
+                sqlx::query!(
                     "INSERT INTO keys (
-                        user_id, key_name, key_value, key_description, key_type_id, key_tag, expiration_date, salt, nonce
-                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                     RETURNING id",
+                        user_id, key_name, key_value, key_description, key_type_id, key_tag, key_pair_value, expiration_date, salt, nonce
+                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
                     auth.0, 
                     request_data.key_name, 
                     encrypted_data.ciphertext, 
                     request_data.key_description, 
                     request_data.key_type_id,
                     request_data.key_tag,
+                    public_key,
                     request_data.expiration_date, 
                     encrypted_data.salt,
                     encrypted_data.nonce
-                )
-                .fetch_one(pool.inner())
-                .await
-                .map_err(|_e| Status::InternalServerError)?
-                .id;
-
-                sqlx::query!(
-                    "INSERT INTO keys (
-                        user_id, key_name, key_value, key_description, key_type_id, key_tag, key_pair_id, expiration_date
-                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-                    auth.0, 
-                    request_data.key_name, 
-                    public_key, 
-                    request_data.key_description, 
-                    request_data.key_type_id,
-                    request_data.key_tag,
-                    private_key_id,
-                    request_data.expiration_date,
                 )
                 .execute(pool.inner())
                 .await

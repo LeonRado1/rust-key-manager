@@ -21,9 +21,11 @@ CREATE TABLE keys (
     key_description TEXT,
     key_type_id INTEGER NOT NULL REFERENCES key_types(id),
     key_tag VARCHAR(255),
-    key_pair_id iNTEGER REFERENCES keys(id),
+    key_pair_value TEXT,
     expiration_date TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    salt TEXT,
+    nonce TEXT
 );
 
 CREATE TABLE recovery_codes (

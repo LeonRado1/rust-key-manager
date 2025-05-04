@@ -1,6 +1,7 @@
 use aes_gcm::*;
 use aes_gcm::aead::Aead;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD as BASE64_SAFE};
 use ring::rand::SecureRandom;
 use rocket::http::Status;
 use ssh_key::{Algorithm, LineEnding, PrivateKey};
@@ -17,6 +18,15 @@ pub struct SshKeyPair {
     pub public_key: String,
 }
 
+pub enum KeyEncoding {
+    Hex,
+    Base64,
+}
+
+pub enum KeyType {
+    ApiKey,
+    Token,
+}
 
 pub fn encrypt(value: &str, master_password: &str) -> Result<EncryptedData, Status> {
 
@@ -101,5 +111,23 @@ pub fn generate_ssh_key_pair() -> Result<SshKeyPair, Status> {
     Ok(SshKeyPair {
         private_key: private_key_openssh.to_string(),
         public_key: public_key_openssh.to_string(),
+    })
+}
+
+pub fn generate_token(key_type: KeyType, encoding: KeyEncoding) -> Result<String, Status> {
+    
+    let length = match key_type {
+        KeyType::ApiKey => 32,
+        KeyType::Token => 16,
+    };
+
+    let mut buffer = vec![0u8; length];
+    ring::rand::SystemRandom::new()
+        .fill(&mut buffer)
+        .map_err(|_| Status::InternalServerError)?;
+
+    Ok(match encoding {
+        KeyEncoding::Hex => hex::encode(buffer),
+        KeyEncoding::Base64 => BASE64_SAFE.encode(buffer),
     })
 }

@@ -14,6 +14,10 @@ pub enum Route {
     Login,
     #[at("/register")]
     Register,
+    #[at("/add-key")]
+    AddMenu,
+    #[at("/add-key/:id")]
+    AddKey { id: i32 },
     #[not_found]
     #[at("/404")]
     NotFound,
@@ -24,6 +28,8 @@ fn switch(route: Route) -> Html {
         Route::Dashboard => html! { <pages::dashboard::Dashboard /> },
         Route::Login => html! { <pages::login::Login /> },
         Route::Register => html! { <pages::register::Register /> },
+        Route::AddMenu => html! { <pages::add_menu::AddMenu /> },
+        Route::AddKey { id } => html! { <pages::add_key::AddKey id={id} /> },
         Route::NotFound => html! { <pages::not_found::NotFound /> },
     }
 }
@@ -51,7 +57,7 @@ pub fn app_router() -> Html {
             <nav class="bg-light py-2">
                 <div class="container d-flex align-items-center justify-content-between bg-light">
                     <h3 class="fs-5 m-0">{ "🔐 Key Manager" }</h3>
-                    <div class="d-flex aling-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2">
                         {
                             if let Some(user) = &user_ctx.user {
                                 html! {
@@ -67,8 +73,8 @@ pub fn app_router() -> Html {
                                             <i class="bi bi-bar-chart-fill me-1"></i>
                                             { "Dashboard" }
                                         </Link<Route>>
-                                        <Link<Route> to={Route::Register} classes="btn btn-outline-dark">
-                                            <i class="bi bi-file-earmark-plus-fill me-1"></i>
+                                        <Link<Route> to={Route::AddMenu} classes="btn btn-outline-dark">
+                                            <i class="bi bi-plus-circle-fill me-1"></i>
                                             { "Add Key" }
                                         </Link<Route>>
                                         <Link<Route> to={Route::Register} classes="btn btn-outline-dark">

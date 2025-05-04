@@ -12,3 +12,17 @@ pub fn get_type_class(key_type: i32) -> &'static str {
         _ => "bg-secondary",
     }
 }
+
+pub fn get_btn_type_class(key_type: i32) -> String {
+    format!("btn-{}", &get_type_class(key_type)[3..])
+}
+
+pub fn get_type_name(key_type: i32) -> &'static str {
+    match key_type {
+        PASSWORD => "Password",
+        TOKEN => "Token",
+        API_KEY => "API Key",
+        SSH_KEY => "SSH Key",
+        _ => "Unknown",
+    }
+}

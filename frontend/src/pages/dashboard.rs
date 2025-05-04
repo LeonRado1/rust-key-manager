@@ -244,7 +244,7 @@ pub fn dashboard() -> Html {
                                                     key.expiration_date
                                                         .map_or(
                                                             String::new(),
-                                                            |d| d.format("%Y-%m-%d %H:%M:%S").to_string()
+                                                            |d| d.format("%y/%m/%d %H:%M:%S").to_string()
                                                         )
                                                 }
                                             </td>

@@ -26,3 +26,5 @@ ring = "0.17.14"
 rsa = "0.9.2"
 rand = "0.8.5"
 ssh-key = { version = "0.6.1", features = ["rsa"] }
+hex = "0.4.3"
+garde = { version = "0.22", features = ["derive", "email", "regex"] }
