@@ -24,6 +24,7 @@ async fn index() -> String {
 fn create_db_pool(database_url: &str) -> PgPool {
     PgPoolOptions::new()
         .max_connections(5)
+        .acquire_timeout(std::time::Duration::from_secs(3))
         .connect_lazy(database_url)
         .expect("Failed to create pool")
 }

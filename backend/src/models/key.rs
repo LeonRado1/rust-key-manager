@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use chrono::NaiveDateTime;
+use rocket::fs::TempFile;
 
 #[derive(Serialize, FromRow)]
 pub struct Key {
@@ -34,7 +35,13 @@ pub struct KeyRequest {
     pub key_description: Option<String>,
     pub key_type_id: i32,
     pub key_tag: Option<String>,
-    pub expiration_date: Option<NaiveDateTime>
+    pub expiration_date: Option<String>,
+}
+
+#[derive(FromForm)]
+pub struct ImportKeyForm<'r> {
+    pub json: String,
+    pub file: TempFile<'r>,
 }
 
 #[derive(Deserialize)]

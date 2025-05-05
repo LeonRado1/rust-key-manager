@@ -2,10 +2,12 @@ use aes_gcm::*;
 use aes_gcm::aead::Aead;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD as BASE64_SAFE};
+use rand::rngs::OsRng;
 use ring::rand::SecureRandom;
 use rocket::http::Status;
 use ssh_key::{Algorithm, LineEnding, PrivateKey};
 use ssh_key::HashAlg::Sha256;
+use ssh_key::private::Ed25519PrivateKey;
 
 pub struct EncryptedData {
     pub ciphertext: String,
@@ -95,10 +97,10 @@ pub fn decrypt(ciphertext: &str, salt: &str, nonce: &str, master_password: &str)
 pub fn generate_ssh_key_pair() -> Result<SshKeyPair, Status> {
 
     let private_key = PrivateKey::random(
-        &mut rand::thread_rng(), 
-        Algorithm::Rsa { hash: Some(Sha256) }
+        &mut OsRng,
+        Algorithm::Ed25519
     ).map_err(|_| Status::InternalServerError)?;
-    
+
     let private_key_openssh = private_key
         .to_openssh(LineEnding::LF)
         .map_err(|_| Status::InternalServerError)?;
@@ -107,7 +109,7 @@ pub fn generate_ssh_key_pair() -> Result<SshKeyPair, Status> {
         .public_key()
         .to_openssh()
         .map_err(|_| Status::InternalServerError)?;
-
+    
     Ok(SshKeyPair {
         private_key: private_key_openssh.to_string(),
         public_key: public_key_openssh.to_string(),

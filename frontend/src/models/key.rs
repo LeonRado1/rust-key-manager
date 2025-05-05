@@ -15,7 +15,7 @@ pub struct PartialKey {
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct KeyRequest {
     pub key_name: String,
-    pub key_value: Option<String>,
+    pub key_value: String,
     pub key_description: Option<String>,
     pub key_type_id: i32,
     pub key_tag: Option<String>,

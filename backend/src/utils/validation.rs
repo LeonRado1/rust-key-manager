@@ -21,26 +21,26 @@ pub fn validate_email(email: &str) -> Result<(), Report> {
     EmailRule(email.to_string()).validate()
 }
 
-pub fn validate_password_requirements(password: &str) -> Result<(), &'static str> {
+pub fn validate_password(password: &str) -> Result<(), String> {
     if password.len() < 8 {
-        return Err("Password must be at least 8 characters long");
+        return Err("Password must be at least 8 characters long".to_string());
     }
 
     if !password.chars().any(|c| c.is_ascii_digit()) {
-        return Err("Password must contain at least one number");
+        return Err("Password must contain at least one number".to_string());
     }
 
     if !password.chars().any(|c| c.is_ascii_uppercase()) {
-        return Err("Password must contain at least one uppercase letter");
+        return Err("Password must contain at least one uppercase letter".to_string());
     }
 
     if !password.chars().any(|c| c.is_ascii_lowercase()) {
-        return Err("Password must contain at least one lowercase letter");
+        return Err("Password must contain at least one lowercase letter".to_string());
     }
 
     let special_chars = "!@#$%^&*()";
     if !password.chars().any(|c| special_chars.contains(c)) {
-        return Err("Password must contain at least one special character");
+        return Err("Password must contain at least one special character".to_string());
     }
 
     Ok(())

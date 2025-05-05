@@ -1,11 +1,15 @@
+use chrono::NaiveDateTime;
+use rocket::form::Form;
 use rocket::serde::json::Json;
 use rocket::http::Status;
 use sqlx::PgPool;
 use rocket::State;
+use tokio::io::AsyncReadExt;
 use crate::middleware::LoggedUser;
-use crate::models::{Key, PartialKey, KeyRequest, PartialKeyRequest, KeysResponse};
-use crate::services::{encrypt, generate_ssh_key_pair};
-use crate::utils::constants::SSH_KEY;
+use crate::models::{Key, PartialKey, KeyRequest, PartialKeyRequest, KeysResponse, ImportKeyForm};
+use crate::services::{encrypt, generate_ssh_key_pair, generate_token, KeyEncoding, KeyType};
+use crate::utils::constants::{PASSWORD, SSH_KEY, TOKEN};
+use crate::utils::validation::{validate_openssh_key, validate_openssh_private_key, validate_password};
 
 #[get("/")]
 async fn get_keys(
@@ -18,7 +22,9 @@ async fn get_keys(
          FROM keys 
          JOIN key_types 
             ON key_types.id = keys.key_type_id
-         WHERE user_id = $1",
+         WHERE user_id = $1 
+           AND (expiration_date IS NULL OR expiration_date > CURRENT_TIMESTAMP) 
+           AND is_revoked = false",
         auth.0
     )
     .fetch_all(pool.inner())
@@ -28,10 +34,52 @@ async fn get_keys(
     Ok(Json(keys))
 }
 
+#[get("/revoked")]
+async fn get_revoked_keys(
+    pool: &State<PgPool>,
+    auth: LoggedUser
+) -> Result<Json<Vec<PartialKey>>, Status> {
+    let keys = sqlx::query_as!(
+        PartialKey,
+        "SELECT keys.id, key_name, key_description, key_type_id, key_type, key_tag, expiration_date
+         FROM keys
+         JOIN key_types
+            ON key_types.id = keys.key_type_id
+         WHERE user_id = $1 AND is_revoked = true",
+        auth.0
+    )
+        .fetch_all(pool.inner())
+        .await
+        .map_err(|_e| { Status::InternalServerError })?;
+
+    Ok(Json(keys))
+}
+
+#[get("/expired")]
+async fn get_expired_keys(
+    pool: &State<PgPool>,
+    auth: LoggedUser
+) -> Result<Json<Vec<PartialKey>>, Status> {
+    let keys = sqlx::query_as!(
+        PartialKey,
+        "SELECT keys.id, key_name, key_description, key_type_id, key_type, key_tag, expiration_date
+         FROM keys
+         JOIN key_types
+            ON key_types.id = keys.key_type_id
+         WHERE user_id = $1 AND expiration_date < CURRENT_TIMESTAMP AND is_revoked = false",
+        auth.0
+    )
+        .fetch_all(pool.inner())
+        .await
+        .map_err(|_e| { Status::InternalServerError })?;
+
+    Ok(Json(keys))
+}
+
 #[post("/", data = "<request_data>")]
 async fn create_key(
     pool: &State<PgPool>,
-    request_data: Json<KeyRequest>,
+    mut request_data: Json<KeyRequest>,
     auth: LoggedUser
 ) -> Result<(), Status> {
     
@@ -59,8 +107,8 @@ async fn create_key(
             Ok(encrypted_data) => {
                 sqlx::query!(
                     "INSERT INTO keys (
-                        user_id, key_name, key_value, key_description, key_type_id, key_tag, key_pair_value, expiration_date, salt, nonce
-                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+                        user_id, key_name, key_value, key_description, key_type_id, key_tag, key_pair_value, salt, nonce
+                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
                     auth.0, 
                     request_data.key_name, 
                     encrypted_data.ciphertext, 
@@ -68,7 +116,6 @@ async fn create_key(
                     request_data.key_type_id,
                     request_data.key_tag,
                     public_key,
-                    request_data.expiration_date, 
                     encrypted_data.salt,
                     encrypted_data.nonce
                 )
@@ -82,8 +129,39 @@ async fn create_key(
         }
     }
     else {
+
+        if request_data.key_type_id == PASSWORD {
+            if request_data.key_value.is_empty() {
+                return Err(Status::BadRequest);
+            }
+
+            if let Err(_e) = validate_password(&request_data.key_value) {
+                return Err(Status::UnprocessableEntity);
+            };
+        };
+
+        if request_data.key_value.is_empty() {
+            let (key_type, encoding) = if request_data.key_type_id == TOKEN {
+                (KeyType::Token, KeyEncoding::Base64)
+            } else {
+                (KeyType::ApiKey, KeyEncoding::Hex)
+            };
+
+            request_data.key_value = generate_token(key_type, encoding)?;
+        }
+
         let encrypted_data = encrypt(&(request_data.key_value), &password_hash);
-        
+
+        let expiration_date: Option<NaiveDateTime> = if request_data.expiration_date.is_none() {
+            None
+        } else {
+            let date_str = request_data.expiration_date.as_ref().unwrap();
+            Some(
+                NaiveDateTime::parse_from_str(&date_str, "%y/%m/%d %H:%M:%S")
+                    .map_err(|_| Status::ExpectationFailed)?
+            )
+        };
+
         match encrypted_data {
             Ok(encrypted_data) => {
                 sqlx::query!(
@@ -96,7 +174,7 @@ async fn create_key(
                     request_data.key_description, 
                     request_data.key_type_id,
                     request_data.key_tag,
-                    request_data.expiration_date, 
+                    expiration_date, 
                     encrypted_data.salt,
                     encrypted_data.nonce
                 )
@@ -109,6 +187,61 @@ async fn create_key(
             Err(e) => Err(e)
         }
     }
+}
+
+#[post("/import", data = "<form>")]
+async fn import_ssh_key(
+    pool: &State<PgPool>,
+    form: Form<ImportKeyForm<'_>>,
+    auth: LoggedUser
+) -> Result<(), Status> {
+
+    let request_data: KeyRequest = serde_json::from_str(&form.json)
+        .map_err(|_| Status::BadRequest)?;
+
+    let mut content = String::new();
+    form.file.open().await
+        .map_err(|_| Status::InternalServerError)?
+        .read_to_string(&mut content)
+        .await
+        .map_err(|_| Status::BadRequest)?;
+
+    if !validate_openssh_private_key(&content) || !validate_openssh_key(request_data.key_value.as_str()) {
+        return Err(Status::ExpectationFailed);
+    }
+
+    let result = sqlx::query!(
+        "SELECT password_hash FROM users WHERE id = $1",
+        auth.0
+    )
+    .fetch_one(pool.inner())
+    .await
+    .map_err(|_| Status::Unauthorized)?;
+
+    let password_hash: String = result.password_hash;
+
+    let encrypted_data = encrypt(&content, &password_hash)
+        .map_err(|_| Status::InternalServerError)?;
+
+    sqlx::query!(
+        "INSERT INTO keys (
+            user_id, key_name, key_value, key_description, key_type_id, key_tag, key_pair_value, salt, nonce
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+        auth.0,
+        request_data.key_name,
+        encrypted_data.ciphertext,
+        request_data.key_description,
+        request_data.key_type_id,
+        request_data.key_tag,
+        request_data.key_value,
+        encrypted_data.salt,
+        encrypted_data.nonce
+    )
+    .execute(pool.inner())
+    .await
+    .map_err(|_| Status::InternalServerError)?;
+
+    Ok(())
 }
 
 /// Set expiration date for a specific key
@@ -211,7 +344,7 @@ pub fn routes() -> Vec<rocket::Route> {
         get_keys, expired, // Get keys
         create_key, delete, // Creation or deletion
         set_expiration, // Update key properties
-         // Import keys(Post)
+        import_ssh_key
     ]
 }
 

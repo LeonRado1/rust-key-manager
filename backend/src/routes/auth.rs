@@ -14,39 +14,38 @@ use crate::middleware::LoggedUser;
 use crate::models::*;
 use crate::services::enqueue_email;
 use crate::utils::jwt_token::generate_jwt_token;
+use crate::utils::validation::{validate_email, validate_password, validate_username};
 
 #[post("/login", data = "<request_data>")]
 async fn login(
     pool: &State<PgPool>,
     request_data: Json<LoginRequest>
 ) -> Result<Json<AuthResponse>, Status> {
-    let record = sqlx::query(
-        "SELECT id, username, password_hash, email FROM users WHERE email = $1"
+    let record = sqlx::query!(
+        "SELECT id, username, password_hash, email FROM users WHERE email = $1",
+        &request_data.email
     )
-    .bind(&request_data.email)
     .fetch_one(pool.inner())
     .await
     .map_err(|_| Status::Unauthorized)?;
 
-    let is_valid_password = verify(&request_data.password, record.get("password_hash"))
+    let is_valid_password = verify(&request_data.password, &record.password_hash)
         .map_err(|_| Status::InternalServerError)?;
     
     if !is_valid_password { 
         return Err(Status::Unauthorized); 
     }
 
-    let token = generate_jwt_token(record.get("id"))
+    let token = generate_jwt_token(record.id)
         .map_err(|_| Status::InternalServerError)?;
 
     let user = User {
-        id: record.get("id"),
-        username: record.get("username"),
-        email: record.get("email"),
+        id: record.id,
+        username: record.username,
+        email: record.email,
     };
-    Ok(Json(AuthResponse {
-        user,
-        token
-    }))
+    
+    Ok(Json(AuthResponse { user, token }))
 }
 
 #[post("/register", data = "<request_data>")]
@@ -54,20 +53,30 @@ async fn register(
     pool: &State<PgPool>,
     request_data: Json<RegisterRequest>
 ) -> Result<Json<AuthResponse>, Status> {
+    
+    if let Err(_e) = validate_password(&request_data.password) {
+        return Err(Status::UnprocessableEntity);
+    };
+
+    if let Err(_e) = validate_username(&request_data.username) {
+        return Err(Status::ExpectationFailed);
+    };
+
+    if let Err(_e) = validate_email(&request_data.email) {
+        return Err(Status::ExpectationFailed);
+    };
 
     let password_hash = hash(&request_data.password, DEFAULT_COST)
         .map_err(|_| { Status::InternalServerError })?;
 
-    let record = sqlx::query(
-        "
-        INSERT INTO users (username, email, password_hash)
-        VALUES ($1, $2, $3)
-        RETURNING id, username, email
-        "
+    let record = sqlx::query!(
+        "INSERT INTO users (username, email, password_hash)
+         VALUES ($1, $2, $3)
+         RETURNING id, username, email",
+        &request_data.username,
+        &request_data.email,
+        &password_hash
     )
-    .bind(&request_data.username)
-    .bind(&request_data.email)
-    .bind(&password_hash)
     .fetch_one(pool.inner())
     .await
     .map_err(|e| {
@@ -79,19 +88,16 @@ async fn register(
         }
     })?;
 
-    let token = generate_jwt_token(record.get("id"))
+    let token = generate_jwt_token(record.id)
         .map_err(|_| Status::InternalServerError)?;
-    let username: String = record.get("username");
 
     let user = User {
-        id: record.get("id"),
-        username: record.get("username"),
-        email: record.get("email"),
+        id: record.id,
+        username: record.username,
+        email: record.email,
     };
-    Ok(Json(AuthResponse {
-        user,
-        token
-    }))
+
+    Ok(Json(AuthResponse { user, token }))
 }
 
 /// Request to reset password. Mail the reset token to the user email.
