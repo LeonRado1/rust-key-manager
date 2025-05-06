@@ -24,14 +24,15 @@ CREATE TABLE keys (
     key_pair_value TEXT,
     expiration_date TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
     salt TEXT NOT NULL,
     nonce TEXT NOT NULL,
-    is_revoked BOOLEAN DEFAULT false
+    is_revoked BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE recovery_codes (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     code VARCHAR(15) NOT NULL,
-    is_used BOOLEAN DEFAULT false
+    is_used BOOLEAN NOT NULL DEFAULT false
 )

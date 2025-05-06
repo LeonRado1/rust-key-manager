@@ -1,4 +1,5 @@
 use js_sys::Math;
+use web_sys::window;
 
 pub fn string_or_none(s: String) -> Option<String> {
     if s.trim().is_empty() {
@@ -17,4 +18,12 @@ pub fn generate_password(length: usize) -> String {
             CHARSET.chars().nth(idx).unwrap_or('a')
         })
         .collect()
+}
+
+pub fn copy_to_clipboard(text: &str) {
+    let window = window().expect("No window found.");
+    let navigator = window.navigator();
+    let clipboard = navigator.clipboard();
+    
+    let _ = clipboard.write_text(text);
 }

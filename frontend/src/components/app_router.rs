@@ -18,6 +18,8 @@ pub enum Route {
     AddMenu,
     #[at("/add-key/:id")]
     AddKey { id: i32 },
+    #[at("/key-detail/:id")]
+    KeyDetail { id: i32 },
     #[not_found]
     #[at("/404")]
     NotFound,
@@ -30,6 +32,7 @@ fn switch(route: Route) -> Html {
         Route::Register => html! { <pages::register::Register /> },
         Route::AddMenu => html! { <pages::add_menu::AddMenu /> },
         Route::AddKey { id } => html! { <pages::add_key::AddKey id={id} /> },
+        Route::KeyDetail { id } => html! { <pages::key_detail::KeyDetail id={id} /> },
         Route::NotFound => html! { <pages::not_found::NotFound /> },
     }
 }

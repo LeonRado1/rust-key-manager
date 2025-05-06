@@ -5,7 +5,7 @@ use wasm_bindgen::UnwrapThrowExt;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{File, FormData};
 use crate::helpers::error_codes::get_error_message_from_code;
-use crate::models::key::{KeyRequest, PartialKey};
+use crate::models::key::{Key, KeyRequest, PartialKey};
 
 pub async fn get_keys(token: &str) -> Result<Vec<PartialKey>, String> {
     let client = Client::new();
@@ -13,7 +13,7 @@ pub async fn get_keys(token: &str) -> Result<Vec<PartialKey>, String> {
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await
-        .map_err(|_e| "Error while sending request. Try again later.")?;
+        .map_err(|_e| "Error while sending a request. Try again later.")?;
 
 
     if let Some(error_message) = get_error_message_from_code(response.status()) {
@@ -34,7 +34,7 @@ pub async fn add_key(token: &str, key_request: KeyRequest) -> Result<(), String>
         .json(&key_request)
         .send()
         .await
-        .map_err(|_e| "Error while sending request. Try again later.")?;
+        .map_err(|_e| "Error while sending a request. Try again later.")?;
 
 
     if let Some(error_message) = get_error_message_from_code(response.status()) {
@@ -70,11 +70,30 @@ pub async fn import_ssh_key(
         .multipart(form)
         .send()
         .await
-        .map_err(|_e| "Error while sending request. Try again later.")?;
+        .map_err(|_e| "Error while sending a request. Try again later.")?;
 
     if let Some(error_message) = get_error_message_from_code(response.status()) {
         return Err(error_message);
     }
 
     Ok(())
+}
+
+pub async fn get_key_detail(token: &str, key_id: i32) -> Result<Key, String> {
+    let client = Client::new();
+    let response = client.get(format!("http://127.0.0.1:8000/keys/key/{}", key_id))
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|_e| "Error while sending a request. Try again later.")?;
+
+
+    if let Some(error_message) = get_error_message_from_code(response.status()) {
+        return Err(error_message);
+    }
+
+    let response = response.json().await
+        .map_err(|_e| "Error while parsing response. Try again later.")?;
+
+    Ok(response)
 }

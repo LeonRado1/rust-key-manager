@@ -12,9 +12,11 @@ pub struct Key {
     pub key_type_id: i32,
     pub key_type: String,
     pub key_tag: Option<String>,
-    pub key_pair_id: Option<i32>,
+    pub key_pair_value: Option<String>,
     pub expiration_date: Option<NaiveDateTime>,
     pub created_at: Option<NaiveDateTime>,
+    pub updated_at: Option<NaiveDateTime>,
+    pub is_revoked: bool,
 }
 
 #[derive(Serialize, FromRow)]

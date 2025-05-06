@@ -6,6 +6,7 @@ use yew_router::prelude::Link;
 use crate::components::app_router::Route;
 use crate::constants::key_types::{get_type_class, API_KEY, PASSWORD, SSH_KEY, TOKEN};
 use crate::context::user_context::use_user_context;
+use crate::helpers::date::format_date;
 use crate::helpers::storage;
 use crate::models::key::PartialKey;
 use crate::services::keys;
@@ -244,13 +245,13 @@ pub fn dashboard() -> Html {
                                                     key.expiration_date
                                                         .map_or(
                                                             String::new(),
-                                                            |d| d.format("%y/%m/%d %H:%M:%S").to_string()
+                                                            |d| format_date(Some(d))
                                                         )
                                                 }
                                             </td>
                                             <td>
                                                 <Link<Route>
-                                                    to={Route::Register}
+                                                    to={Route::KeyDetail { id: key.id } }
                                                     classes="btn btn-sm btn-link p-0 text-decoration-none"
                                                 >
                                                     <i class="bi bi-box-arrow-up-right me-1"></i>

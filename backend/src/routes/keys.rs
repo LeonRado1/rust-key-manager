@@ -7,7 +7,7 @@ use rocket::State;
 use tokio::io::AsyncReadExt;
 use crate::middleware::LoggedUser;
 use crate::models::{Key, PartialKey, KeyRequest, PartialKeyRequest, KeysResponse, ImportKeyForm};
-use crate::services::{encrypt, generate_ssh_key_pair, generate_token, KeyEncoding, KeyType};
+use crate::services::{decrypt, encrypt, generate_ssh_key_pair, generate_token, KeyEncoding, KeyType};
 use crate::utils::constants::{PASSWORD, SSH_KEY, TOKEN};
 use crate::utils::validation::{validate_openssh_key, validate_openssh_private_key, validate_password};
 
@@ -22,8 +22,8 @@ async fn get_keys(
          FROM keys 
          JOIN key_types 
             ON key_types.id = keys.key_type_id
-         WHERE user_id = $1 
-           AND (expiration_date IS NULL OR expiration_date > CURRENT_TIMESTAMP) 
+         WHERE user_id = $1
+           AND (expiration_date IS NULL OR expiration_date > CURRENT_TIMESTAMP)
            AND is_revoked = false",
         auth.0
     )
@@ -32,6 +32,44 @@ async fn get_keys(
     .map_err(|_e| { Status::InternalServerError })?;
     
     Ok(Json(keys))
+}
+
+#[get("/key/<key_id>")]
+async fn get_key_detail(
+    pool: &State<PgPool>,
+    key_id: i32,
+    auth: LoggedUser
+) -> Result<Json<Key>, Status> {
+    let mut key = sqlx::query_as!(
+        Key,
+        "SELECT keys.id, key_name, key_value, key_description, key_type_id, key_type, key_tag,
+            key_pair_value, expiration_date, created_at, updated_at, is_revoked
+         FROM keys
+         JOIN key_types
+            ON key_types.id = keys.key_type_id
+         WHERE user_id = $1 AND keys.id = $2",
+        auth.0,
+        key_id
+    )
+    .fetch_one(pool.inner())
+    .await
+    .map_err(|_e| { Status::InternalServerError })?;
+    
+    let record = sqlx::query!(
+        "SELECT password_hash, salt, nonce
+         FROM keys
+         JOIN users ON users.id = keys.user_id
+         WHERE user_id = $1 AND keys.id = $2",
+        auth.0,
+        key_id
+    )
+    .fetch_one(pool.inner())
+    .await
+    .map_err(|_e| { Status::InternalServerError })?;
+    
+    key.key_value = decrypt(&key.key_value, &record.salt, &record.nonce, &record.password_hash)?;
+
+    Ok(Json(key))
 }
 
 #[get("/revoked")]
@@ -48,9 +86,9 @@ async fn get_revoked_keys(
          WHERE user_id = $1 AND is_revoked = true",
         auth.0
     )
-        .fetch_all(pool.inner())
-        .await
-        .map_err(|_e| { Status::InternalServerError })?;
+    .fetch_all(pool.inner())
+    .await
+    .map_err(|_e| { Status::InternalServerError })?;
 
     Ok(Json(keys))
 }
@@ -69,9 +107,9 @@ async fn get_expired_keys(
          WHERE user_id = $1 AND expiration_date < CURRENT_TIMESTAMP AND is_revoked = false",
         auth.0
     )
-        .fetch_all(pool.inner())
-        .await
-        .map_err(|_e| { Status::InternalServerError })?;
+    .fetch_all(pool.inner())
+    .await
+    .map_err(|_e| { Status::InternalServerError })?;
 
     Ok(Json(keys))
 }
@@ -174,7 +212,7 @@ async fn create_key(
                     request_data.key_description, 
                     request_data.key_type_id,
                     request_data.key_tag,
-                    expiration_date, 
+                    expiration_date,
                     encrypted_data.salt,
                     encrypted_data.nonce
                 )
@@ -344,7 +382,7 @@ pub fn routes() -> Vec<rocket::Route> {
         get_keys, expired, // Get keys
         create_key, delete, // Creation or deletion
         set_expiration, // Update key properties
-        import_ssh_key
+        import_ssh_key, get_key_detail
     ]
 }
 

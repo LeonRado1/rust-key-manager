@@ -315,7 +315,8 @@ pub fn add_key(props: &Props) -> Html {
                                     class="form-control"
                                     value={key_request.expiration_date.clone().unwrap_or_default()}
                                     placeholder={
-                                        if props.id != TOKEN { "Expiration date is not for this key type" } else { "YY/MM/DD hh:mm:ss" }
+                                        if props.id != TOKEN { "The expiration date is not for this key type" } 
+                                        else { "YY/MM/DD hh:mm:ss" }
                                     }
                                     disabled={props.id != TOKEN}
                                     oninput={on_expiration_change}
