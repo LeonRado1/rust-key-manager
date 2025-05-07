@@ -6,7 +6,7 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, BlobPropertyBag, File, HtmlAnchorElement, Url};
 use yew::BaseComponent;
 use crate::helpers::error_codes::get_error_message_from_code;
-use crate::models::key::{Key, KeyRequest, PartialKey};
+use crate::models::key::{Key, KeyRequest, PartialKey, UpdateKeyRequest};
 
 pub async fn get_keys(token: &str) -> Result<Vec<PartialKey>, String> {
     let client = Client::new();
@@ -98,9 +98,9 @@ pub async fn get_key_detail(token: &str, key_id: i32) -> Result<Key, String> {
 pub async fn export_key(key_value: &str) -> Result<(), String> {
     let array = js_sys::Array::new();
     array.push(&JsValue::from_str(key_value));
-    
+
     let blob_options = BlobPropertyBag::new();
-    
+
     let blob = Blob::new_with_u8_array_sequence_and_options(&array, &blob_options)
         .map_err(|_| "Failed to create a blob from the content.")?;
 
@@ -125,6 +125,117 @@ pub async fn export_key(key_value: &str) -> Result<(), String> {
     body.remove_child(&link).map_err(|_| "Failed to remove the link element.")?;
 
     Url::revoke_object_url(&url).map_err(|_| "Failed to revoke the object URL.")?;
+
+    Ok(())
+}
+
+pub async fn rotate_key(token: &str, key_id: i32) -> Result<Key, String> {
+    let client = Client::new();
+
+    let response = client.patch(format!("http://127.0.0.1:8000/keys/rotate/{}", key_id))
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|_e| "Error while sending a request. Try again later.")?;
+
+    if let Some(error_message) = get_error_message_from_code(response.status()) {
+        return Err(error_message);
+    }
+
+    let response = response.json().await
+        .map_err(|_e| "Error while parsing response. Try again later.")?;
+
+    Ok(response)
+}
+
+pub async fn revoke_key(token: &str, key_id: i32) -> Result<(), String> {
+    let client = Client::new();
+
+    let response = client.patch(format!("http://127.0.0.1:8000/keys/{}", key_id))
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|_e| "Error while sending a request. Try again later.")?;
+
+    if let Some(error_message) = get_error_message_from_code(response.status()) {
+        return Err(error_message);
+    }
+
+    Ok(())
+}
+
+pub async fn change_key(token: &str, key_request: UpdateKeyRequest) -> Result<Key, String> {
+    let client = Client::new();
+
+    let response = client.put("http://127.0.0.1:8000/keys/change")
+        .header("Authorization", format!("Bearer {}", token))
+        .json(&key_request)
+        .send()
+        .await
+        .map_err(|_e| "Error while sending a request. Try again later.")?;
+
+    if let Some(error_message) = get_error_message_from_code(response.status()) {
+        return Err(error_message);
+    }
+
+    let response = response.json().await
+        .map_err(|_e| "Error while parsing response. Try again later.")?;
+
+    Ok(response)
+}
+
+pub async fn extend_key(token: &str, key_request: UpdateKeyRequest) -> Result<Key, String> {
+    let client = Client::new();
+
+    let response = client.put("http://127.0.0.1:8000/keys/extend")
+        .header("Authorization", format!("Bearer {}", token))
+        .json(&key_request)
+        .send()
+        .await
+        .map_err(|_e| "Error while sending a request. Try again later.")?;
+
+    if let Some(error_message) = get_error_message_from_code(response.status()) {
+        return Err(error_message);
+    }
+
+    let response = response.json().await
+        .map_err(|_e| "Error while parsing response. Try again later.")?;
+
+    Ok(response)
+}
+
+pub async fn extend_rotate_key(token: &str, key_request: UpdateKeyRequest) -> Result<Key, String> {
+    let client = Client::new();
+
+    let response = client.put("http://127.0.0.1:8000/keys/extend/rotate")
+        .header("Authorization", format!("Bearer {}", token))
+        .json(&key_request)
+        .send()
+        .await
+        .map_err(|_e| "Error while sending a request. Try again later.")?;
+
+    if let Some(error_message) = get_error_message_from_code(response.status()) {
+        return Err(error_message);
+    }
+
+    let response = response.json().await
+        .map_err(|_e| "Error while parsing response. Try again later.")?;
+
+    Ok(response)
+}
+
+pub async fn delete_key(token: &str, key_id: i32) -> Result<(), String> {
+    let client = Client::new();
+
+    let response = client.delete(format!("http://127.0.0.1:8000/keys/{}", key_id))
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|_e| "Error while sending a request. Try again later.")?;
+
+    if let Some(error_message) = get_error_message_from_code(response.status()) {
+        return Err(error_message);
+    }
 
     Ok(())
 }
