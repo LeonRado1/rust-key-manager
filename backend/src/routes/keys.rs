@@ -1,9 +1,9 @@
 use chrono::NaiveDateTime;
 use rocket::form::Form;
 use rocket::serde::json::Json;
-use rocket::http::Status;
+use rocket::http::{Header, Status};
 use sqlx::PgPool;
-use rocket::State;
+use rocket::{Response, State};
 use tokio::io::AsyncReadExt;
 use crate::middleware::LoggedUser;
 use crate::models::{Key, PartialKey, KeyRequest, PartialKeyRequest, KeysResponse, ImportKeyForm};
@@ -53,8 +53,8 @@ async fn get_key_detail(
     )
     .fetch_one(pool.inner())
     .await
-    .map_err(|_e| { Status::InternalServerError })?;
-    
+    .map_err(|_e| { Status::NotFound })?;
+
     let record = sqlx::query!(
         "SELECT password_hash, salt, nonce
          FROM keys
@@ -66,7 +66,7 @@ async fn get_key_detail(
     .fetch_one(pool.inner())
     .await
     .map_err(|_e| { Status::InternalServerError })?;
-    
+
     key.key_value = decrypt(&key.key_value, &record.salt, &record.nonce, &record.password_hash)?;
 
     Ok(Json(key))
@@ -382,7 +382,7 @@ pub fn routes() -> Vec<rocket::Route> {
         get_keys, expired, // Get keys
         create_key, delete, // Creation or deletion
         set_expiration, // Update key properties
-        import_ssh_key, get_key_detail
+        import_ssh_key, get_key_detail, export_ssh_key
     ]
 }
 

@@ -119,6 +119,29 @@ pub fn key_detail(props: &Props) -> Html {
         })
     };
 
+    let on_export_ssh = {
+        let key = key.clone();
+        let error_message = error_message.clone();
+
+        Callback::from(move |_e: MouseEvent| {
+            let key = key.clone();
+            let error_message = error_message.clone();
+
+            if !(*error_message).is_empty() {
+                error_message.set(String::new());
+            }
+
+            spawn_local(async move {
+                match keys::export_key(&(*key).clone().unwrap().key_value).await {
+                    Ok(_) => (),
+                    Err(err) => {
+                        error_message.set(err);
+                    }
+                }
+            });
+        })
+    };
+
     html! {
         <div class="col-lg-8 mx-auto my-5">
             if !(*success_message).is_empty() {
@@ -215,6 +238,7 @@ pub fn key_detail(props: &Props) -> Html {
                                     />
                                     <button
                                         class="btn btn-outline-primary"
+                                        onclick={on_export_ssh}
                                     >
                                         <i class="bi bi-download"></i>
                                     </button>

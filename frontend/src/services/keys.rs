@@ -1,9 +1,10 @@
 use js_sys::Uint8Array;
 use reqwest::Client;
 use reqwest::multipart::Form;
-use wasm_bindgen::UnwrapThrowExt;
+use wasm_bindgen::{JsCast, JsValue, UnwrapThrowExt};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{File, FormData};
+use web_sys::{Blob, BlobPropertyBag, File, HtmlAnchorElement, Url};
+use yew::BaseComponent;
 use crate::helpers::error_codes::get_error_message_from_code;
 use crate::models::key::{Key, KeyRequest, PartialKey};
 
@@ -14,7 +15,6 @@ pub async fn get_keys(token: &str) -> Result<Vec<PartialKey>, String> {
         .send()
         .await
         .map_err(|_e| "Error while sending a request. Try again later.")?;
-
 
     if let Some(error_message) = get_error_message_from_code(response.status()) {
         return Err(error_message);
@@ -36,7 +36,6 @@ pub async fn add_key(token: &str, key_request: KeyRequest) -> Result<(), String>
         .await
         .map_err(|_e| "Error while sending a request. Try again later.")?;
 
-
     if let Some(error_message) = get_error_message_from_code(response.status()) {
         return Err(error_message);
     }
@@ -51,7 +50,6 @@ pub async fn import_ssh_key(
 ) -> Result<(), String> {
     let client = Client::new();
 
-    // Get the file data
     let array_buffer = JsFuture::from(file.array_buffer())
         .await
         .map_err(|_| "Failed to read the file.")?;
@@ -87,7 +85,6 @@ pub async fn get_key_detail(token: &str, key_id: i32) -> Result<Key, String> {
         .await
         .map_err(|_e| "Error while sending a request. Try again later.")?;
 
-
     if let Some(error_message) = get_error_message_from_code(response.status()) {
         return Err(error_message);
     }
@@ -96,4 +93,38 @@ pub async fn get_key_detail(token: &str, key_id: i32) -> Result<Key, String> {
         .map_err(|_e| "Error while parsing response. Try again later.")?;
 
     Ok(response)
+}
+
+pub async fn export_key(key_value: &str) -> Result<(), String> {
+    let array = js_sys::Array::new();
+    array.push(&JsValue::from_str(key_value));
+    
+    let blob_options = BlobPropertyBag::new();
+    
+    let blob = Blob::new_with_u8_array_sequence_and_options(&array, &blob_options)
+        .map_err(|_| "Failed to create a blob from the content.")?;
+
+    let url = Url::create_object_url_with_blob(&blob)
+        .map_err(|_| "Failed to generate a URL for the download.")?;
+
+    let window = web_sys::window().ok_or("Failed to access the browser window.")?;
+    let document = window.document().ok_or("Failed to access the document object.")?;
+    let body = document.body().ok_or("Failed to access the document body.")?;
+
+    let link = document
+        .create_element("a")
+        .map_err(|_| "Failed to create a download link.")?
+        .dyn_into::<HtmlAnchorElement>()
+        .map_err(|_| "Failed to cast the link element.")?;
+
+    link.set_href(&url);
+    link.set_download("exported.pem");
+
+    body.append_child(&link).map_err(|_| "Failed to append link to the body.")?;
+    link.click();
+    body.remove_child(&link).map_err(|_| "Failed to remove the link element.")?;
+
+    Url::revoke_object_url(&url).map_err(|_| "Failed to revoke the object URL.")?;
+
+    Ok(())
 }
