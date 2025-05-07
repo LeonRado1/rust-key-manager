@@ -40,6 +40,7 @@ pub struct KeyRequest {
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct UpdateKeyRequest {
+    pub key_id: i32,
     pub new_password: Option<String>,
     pub new_expiration_date: Option<String>,
 }

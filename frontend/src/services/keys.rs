@@ -118,7 +118,7 @@ pub async fn export_key(key_value: &str) -> Result<(), String> {
         .map_err(|_| "Failed to cast the link element.")?;
 
     link.set_href(&url);
-    link.set_download("exported.pem");
+    link.set_download("ssh_exported.pem");
 
     body.append_child(&link).map_err(|_| "Failed to append link to the body.")?;
     link.click();

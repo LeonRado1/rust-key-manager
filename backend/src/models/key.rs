@@ -47,15 +47,8 @@ pub struct ImportKeyForm<'r> {
 }
 
 #[derive(Deserialize)]
-pub struct PartialKeyRequest {
-    pub key_value: Option<String>,
-    pub key_name: Option<String>,
-    pub key_type: Option<String>,
-    pub key_description: Option<String>,
-    pub expiration_date: Option<NaiveDateTime>,
-}
-
-#[derive(Serialize)]
-pub struct KeysResponse {
-    pub message: String,
+pub struct UpdateKeyRequest {
+    pub key_id: i32,
+    pub new_password: Option<String>,
+    pub new_expiration_date: Option<String>,
 }
