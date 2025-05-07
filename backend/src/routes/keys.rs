@@ -24,7 +24,8 @@ async fn get_keys(
             ON key_types.id = keys.key_type_id
          WHERE user_id = $1
            AND (expiration_date IS NULL OR expiration_date > CURRENT_TIMESTAMP)
-           AND is_revoked = false",
+           AND is_revoked = false
+         ORDER BY COALESCE(updated_at, created_at) DESC;",
         auth.0
     )
     .fetch_all(pool.inner())
@@ -83,7 +84,8 @@ async fn get_revoked_keys(
          FROM keys
          JOIN key_types
             ON key_types.id = keys.key_type_id
-         WHERE user_id = $1 AND is_revoked = true",
+         WHERE user_id = $1 AND is_revoked = true
+         ORDER BY COALESCE(updated_at, created_at) DESC;",
         auth.0
     )
     .fetch_all(pool.inner())
@@ -104,7 +106,8 @@ async fn get_expired_keys(
          FROM keys
          JOIN key_types
             ON key_types.id = keys.key_type_id
-         WHERE user_id = $1 AND expiration_date < CURRENT_TIMESTAMP AND is_revoked = false",
+         WHERE user_id = $1 AND expiration_date < CURRENT_TIMESTAMP AND is_revoked = false
+         ORDER BY COALESCE(updated_at, created_at) DESC;",
         auth.0
     )
     .fetch_all(pool.inner())

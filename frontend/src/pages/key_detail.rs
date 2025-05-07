@@ -142,6 +142,243 @@ pub fn key_detail(props: &Props) -> Html {
         })
     };
 
+    let on_extend = {
+        let key = key.clone();
+        let update_request = update_request.clone();
+        
+        let success_message = success_message.clone();
+        let error_message = error_message.clone();
+
+        Callback::from(move |_e: MouseEvent| {
+            let key = key.clone();
+            let update_request = update_request.clone();
+            
+            let success_message = success_message.clone();
+            let error_message = error_message.clone();
+
+            if !(*error_message).is_empty() {
+                error_message.set(String::new());
+            }
+
+            if !(*success_message).is_empty() {
+                success_message.set(String::new());
+            }
+
+            spawn_local(async move {
+                if let Ok(token) = storage::get_token() {
+                    let mut req = UpdateKeyRequest::default();
+                    req.key_id = (*key).clone().unwrap().id;
+                    req.new_expiration_date = (*update_request).clone().new_expiration_date;
+
+                    match keys::extend_key(&token, req).await {
+                        Ok(updated_key) => {
+                            key.set(Some(updated_key));
+                            success_message.set("Your request was processed successfully.".to_string());
+                            update_request.set(UpdateKeyRequest::default());
+                        }
+                        Err(err) => error_message.set(err),
+                    }
+                }
+            });
+        })
+    };
+
+    let on_extend_rotate = {
+        let key = key.clone();
+        let update_request = update_request.clone();
+
+        let success_message = success_message.clone();
+        let error_message = error_message.clone();
+
+        Callback::from(move |_e: MouseEvent| {
+            let key = key.clone();
+            let update_request = update_request.clone();
+
+            let success_message = success_message.clone();
+            let error_message = error_message.clone();
+
+            if !(*error_message).is_empty() {
+                error_message.set(String::new());
+            }
+
+            if !(*success_message).is_empty() {
+                success_message.set(String::new());
+            }
+
+            spawn_local(async move {
+                if let Ok(token) = storage::get_token() {
+                    let mut req = UpdateKeyRequest::default();
+                    req.key_id = (*key).clone().unwrap().id;
+                    req.new_expiration_date = (*update_request).clone().new_expiration_date;
+
+                    match keys::extend_rotate_key(&token, req).await {
+                        Ok(updated_key) => {
+                            key.set(Some(updated_key));
+                            success_message.set("Your request was processed successfully.".to_string());
+                            update_request.set(UpdateKeyRequest::default());
+                        }
+                        Err(err) => error_message.set(err),
+                    }
+                }
+            });
+        })
+    };
+
+    let on_change_password = {
+        let key = key.clone();
+        let update_request = update_request.clone();
+
+        let success_message = success_message.clone();
+        let error_message = error_message.clone();
+
+        Callback::from(move |_e: MouseEvent| {
+            let key = key.clone();
+            let update_request = update_request.clone();
+
+            let success_message = success_message.clone();
+            let error_message = error_message.clone();
+
+            if !(*error_message).is_empty() {
+                error_message.set(String::new());
+            }
+
+            if !(*success_message).is_empty() {
+                success_message.set(String::new());
+            }
+
+            spawn_local(async move {
+                if let Ok(token) = storage::get_token() {
+                    let mut req = UpdateKeyRequest::default();
+                    req.key_id = (*key).clone().unwrap().id;
+                    req.new_password = (*update_request).clone().new_password;
+
+                    match keys::change_key(&token, req).await {
+                        Ok(updated_key) => {
+                            key.set(Some(updated_key));
+                            success_message.set("Your request was processed successfully.".to_string());
+                            update_request.set(UpdateKeyRequest::default());
+                        }
+                        Err(err) => error_message.set(err),
+                    }
+                }
+            });
+        })
+    };
+
+    let on_rotate = {
+        let key = key.clone();
+        
+        let success_message = success_message.clone();
+        let error_message = error_message.clone();
+
+        Callback::from(move |_e: MouseEvent| {
+            let key = key.clone();
+
+            let success_message = success_message.clone();
+            let error_message = error_message.clone();
+
+            if !(*error_message).is_empty() {
+                error_message.set(String::new());
+            }
+
+            if !(*success_message).is_empty() {
+                success_message.set(String::new());
+            }
+            
+            let key_id = (*key).clone().unwrap().id;
+
+            spawn_local(async move {
+                if let Ok(token) = storage::get_token() {
+                    match keys::rotate_key(&token, key_id).await {
+                        Ok(updated_key) => {
+                            key.set(Some(updated_key));
+                            success_message.set("Your request was processed successfully.".to_string());
+                        }
+                        Err(err) => error_message.set(err),
+                    }
+                }
+            });
+        })
+    };
+
+    let on_revoke = {
+        let key = key.clone();
+
+        let success_message = success_message.clone();
+        let error_message = error_message.clone();
+        
+        let navigator = navigator.clone();
+
+        Callback::from(move |_e: MouseEvent| {
+            let key = key.clone();
+
+            let success_message = success_message.clone();
+            let error_message = error_message.clone();
+            
+            let navigator = navigator.clone();
+
+            if !(*error_message).is_empty() {
+                error_message.set(String::new());
+            }
+
+            if !(*success_message).is_empty() {
+                success_message.set(String::new());
+            }
+
+            let key_id = (*key).clone().unwrap().id;
+
+            spawn_local(async move {
+                if let Ok(token) = storage::get_token() {
+                    match keys::revoke_key(&token, key_id).await {
+                        Ok(_) => {
+                            navigator.push(&Route::Dashboard);
+                        }
+                        Err(err) => error_message.set(err),
+                    }
+                }
+            });
+        })
+    };
+
+    let on_delete = {
+        let key = key.clone();
+
+        let success_message = success_message.clone();
+        let error_message = error_message.clone();
+
+        let navigator = navigator.clone();
+
+        Callback::from(move |_e: MouseEvent| {
+            let key = key.clone();
+
+            let success_message = success_message.clone();
+            let error_message = error_message.clone();
+
+            let navigator = navigator.clone();
+
+            if !(*error_message).is_empty() {
+                error_message.set(String::new());
+            }
+
+            if !(*success_message).is_empty() {
+                success_message.set(String::new());
+            }
+
+            let key_id = (*key).clone().unwrap().id;
+
+            spawn_local(async move {
+                if let Ok(token) = storage::get_token() {
+                    match keys::delete_key(&token, key_id).await {
+                        Ok(_) => {
+                            navigator.push(&Route::Dashboard);
+                        }
+                        Err(err) => error_message.set(err),
+                    }
+                }
+            });
+        })
+    };
+
     html! {
         <div class="col-lg-8 mx-auto my-5">
             if !(*success_message).is_empty() {
@@ -279,6 +516,7 @@ pub fn key_detail(props: &Props) -> Html {
                                             <button
                                                 class="btn btn-primary"
                                                 disabled={(*update_request).new_expiration_date.is_none()}
+                                                onclick={on_extend}
                                             >
                                                 <i class="bi bi-calendar-plus me-2"></i>
                                                 {"Extend"}
@@ -286,11 +524,15 @@ pub fn key_detail(props: &Props) -> Html {
                                             <button
                                                 class="btn btn-warning"
                                                 disabled={(*update_request).new_expiration_date.is_none()}
+                                                onclick={on_extend_rotate}
                                             >
                                                 <i class="bi bi-arrow-repeat me-2"></i>
                                                 {"Extend & Rotate"}
                                             </button>
-                                            <button class="btn btn-danger">
+                                            <button 
+                                                class="btn btn-danger"
+                                                onclick={on_revoke}
+                                            >
                                                 <i class="bi bi-x-circle me-2"></i>
                                                 {"Revoke"}
                                             </button>
@@ -328,11 +570,15 @@ pub fn key_detail(props: &Props) -> Html {
                                         <button
                                             class="btn btn-success"
                                             disabled={(*update_request).new_password.is_none()}
+                                            onclick={on_change_password}
                                         >
                                             <i class="bi bi-floppy2-fill me-2"></i>
                                             {"Change"}
                                         </button>
-                                        <button class="btn btn-danger">
+                                        <button 
+                                            class="btn btn-danger"
+                                            onclick={on_delete}
+                                        >
                                             <i class="bi bi-trash-fill me-2"></i>
                                             {"Delete"}
                                         </button>
@@ -340,11 +586,17 @@ pub fn key_detail(props: &Props) -> Html {
                                 }
                                 else {
                                     <div class="d-flex gap-2">
-                                        <button class="btn btn-warning">
+                                        <button 
+                                            class="btn btn-warning"
+                                            onclick={on_rotate}
+                                        >
                                             <i class="bi bi-arrow-repeat me-2"></i>
                                             {"Rotate"}
                                         </button>
-                                        <button class="btn btn-danger">
+                                        <button 
+                                            class="btn btn-danger"
+                                            onclick={on_revoke}
+                                        >
                                             <i class="bi bi-x-circle me-2"></i>
                                             {"Revoke"}
                                         </button>

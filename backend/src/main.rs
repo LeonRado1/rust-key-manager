@@ -41,7 +41,7 @@ async fn rocket() -> _ {
 
     let cors = CorsOptions {
         allowed_origins: AllowedOrigins::all(),
-        allowed_methods: vec![Method::Get, Method::Post, Method::Put, Method::Delete, Method::Options]
+        allowed_methods: vec![Method::Get, Method::Post, Method::Put, Method::Patch, Method::Delete, Method::Options]
             .into_iter()
             .map(From::from)
             .collect(),

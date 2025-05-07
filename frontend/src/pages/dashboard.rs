@@ -156,47 +156,57 @@ pub fn dashboard() -> Html {
                 </div>
             </div>
             if !keys.is_empty() {
-                <div class="d-flex align-items-center gap-5 mt-5">
-                    <input
-                        class="form-control w-25"
-                        type="text"
-                        placeholder="Search"
-                        value={(*search_text).clone()}
-                        oninput={on_search_change}
-                    />
-                    <div class="btn-group">
-                        <button
-                            onclick={on_password_click}
-                            class={classes!("btn", "btn-outline-dark",
-                                (*active_filter == Some(PASSWORD)).then_some("active"))}
-                        >
-                            <i class="bi bi-key-fill me-1"></i>
-                            {"Passwords"}
-                        </button>
-                        <button
-                            onclick={on_token_click}
-                            class={classes!("btn", "btn-outline-dark",
-                                (*active_filter == Some(TOKEN)).then_some("active"))}
-                        >
-                            <i class="bi bi-lock-fill me-1"></i>
-                            {"Tokens"}
-                        </button>
-                        <button
-                            onclick={on_api_key_click}
-                            class={classes!("btn", "btn-outline-dark",
-                                (*active_filter == Some(API_KEY)).then_some("active"))}
-                        >
-                            <i class="bi bi-database-fill me-1"></i>
-                            {"API Keys"}
-                        </button>
-                        <button
-                            onclick={on_ssh_key_click}
-                            class={classes!("btn", "btn-outline-dark",
-                                (*active_filter == Some(SSH_KEY)).then_some("active"))}
-                        >
-                            <i class="bi bi-hdd-stack-fill me-1"></i>
-                            {"SSH Keys"}
-                        </button>
+                <div class="d-flex align-items-center justify-content-between mt-5">
+                    <div class="d-flex col-10 align-items-center gap-5">
+                        <input
+                            class="form-control w-25"
+                            type="text"
+                            placeholder="Search"
+                            value={(*search_text).clone()}
+                            oninput={on_search_change}
+                        />
+                        <div class="btn-group">
+                            <button
+                                onclick={on_password_click}
+                                class={classes!("btn", "btn-outline-dark",
+                                    (*active_filter == Some(PASSWORD)).then_some("active"))}
+                            >
+                                <i class="bi bi-key-fill me-1"></i>
+                                {"Passwords"}
+                            </button>
+                            <button
+                                onclick={on_token_click}
+                                class={classes!("btn", "btn-outline-dark",
+                                    (*active_filter == Some(TOKEN)).then_some("active"))}
+                            >
+                                <i class="bi bi-lock-fill me-1"></i>
+                                {"Tokens"}
+                            </button>
+                            <button
+                                onclick={on_api_key_click}
+                                class={classes!("btn", "btn-outline-dark",
+                                    (*active_filter == Some(API_KEY)).then_some("active"))}
+                            >
+                                <i class="bi bi-database-fill me-1"></i>
+                                {"API Keys"}
+                            </button>
+                            <button
+                                onclick={on_ssh_key_click}
+                                class={classes!("btn", "btn-outline-dark",
+                                    (*active_filter == Some(SSH_KEY)).then_some("active"))}
+                            >
+                                <i class="bi bi-hdd-stack-fill me-1"></i>
+                                {"SSH Keys"}
+                            </button>
+                        </div>
+                    </div>
+                    <div class="d-flex col-2 align-items-center justify-content-end gap-3">
+                        <Link<Route> to={Route::Revoked} classes="btn btn-link p-0">
+                            {"Revoked"}
+                        </Link<Route>>
+                        <Link<Route> to={Route::Expired} classes="btn btn-link p-0">
+                            {"Expired"}
+                        </Link<Route>>
                     </div>
                 </div>
                 if !filtered_keys.is_empty() {

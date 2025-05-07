@@ -20,6 +20,14 @@ pub enum Route {
     AddKey { id: i32 },
     #[at("/key-detail/:id")]
     KeyDetail { id: i32 },
+    #[at("/expired")]
+    Expired,
+    #[at("/revoked")]
+    Revoked,
+    #[at("/change-pwd")]
+    ChangePwd,
+    #[at("/settings")]
+    Settings,
     #[not_found]
     #[at("/404")]
     NotFound,
@@ -33,6 +41,10 @@ fn switch(route: Route) -> Html {
         Route::AddMenu => html! { <pages::add_menu::AddMenu /> },
         Route::AddKey { id } => html! { <pages::add_key::AddKey id={id} /> },
         Route::KeyDetail { id } => html! { <pages::key_detail::KeyDetail id={id} /> },
+        Route::Expired => html! { <pages::expired::Expired /> },
+        Route::Revoked => html! { <pages::revoked::Revoked /> },
+        Route::ChangePwd => html! { <pages::change_pwd::ChangePwd /> },
+        Route::Settings => html! { <pages::settings::Settings /> },
         Route::NotFound => html! { <pages::not_found::NotFound /> },
     }
 }
@@ -80,7 +92,7 @@ pub fn app_router() -> Html {
                                             <i class="bi bi-plus-circle-fill me-1"></i>
                                             { "Add Key" }
                                         </Link<Route>>
-                                        <Link<Route> to={Route::Register} classes="btn btn-outline-dark">
+                                        <Link<Route> to={Route::Settings} classes="btn btn-outline-dark">
                                             <i class="bi bi-gear-fill me-1"></i>
                                             {"Settings"}
                                         </Link<Route>>

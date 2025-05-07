@@ -5,3 +5,7 @@ pub mod not_found;
 pub mod add_menu;
 pub mod add_key;
 pub mod key_detail;
+pub mod revoked;
+pub mod expired;
+pub mod change_pwd;
+pub mod settings;
