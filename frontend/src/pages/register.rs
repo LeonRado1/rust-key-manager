@@ -27,9 +27,10 @@ pub fn register() -> Html {
         let navigator = navigator.clone();
 
         use_effect_with(user_ctx.clone(), move |ctx| {
-            if ctx.user.is_some() {
+            if !ctx.is_loading && ctx.user.is_some() {
                 navigator.push(&Route::Dashboard);
             }
+
             || ()
         });
     }

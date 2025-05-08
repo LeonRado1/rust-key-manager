@@ -40,7 +40,7 @@ pub fn key_detail(props: &Props) -> Html {
         let props_id = props.id;
 
         use_effect_with(user_ctx.clone(), move |ctx| {
-            if ctx.user.is_none() {
+            if !ctx.is_loading && ctx.user.is_none() {
                 navigator.push(&Route::Login);
             }
             else {
@@ -50,7 +50,9 @@ pub fn key_detail(props: &Props) -> Html {
                             Ok(response) => {
                                 key.set(Some(response));
                             }
-                            Err(_e) => ()
+                            Err(_e) => {
+                                navigator.push(&Route::Dashboard);
+                            }
                         }
                     }
                 });

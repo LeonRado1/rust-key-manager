@@ -3,7 +3,7 @@ use yew::platform::spawn_local;
 use yew::prelude::*;
 use yew_router::hooks::use_navigator;
 use crate::components::app_router::Route;
-use crate::constants::key_types::{PASSWORD, SSH_KEY, get_type_name, get_type_class, TOKEN};
+use crate::constants::key_types::{PASSWORD, SSH_KEY, get_type_name, get_type_class, TOKEN, API_KEY};
 use crate::context::user_context::use_user_context;
 use crate::helpers::storage;
 use crate::helpers::string_utils::{generate_password, string_or_none};
@@ -38,8 +38,11 @@ pub fn add_key(props: &Props) -> Html {
         let props_id = props.id;
 
         use_effect_with(user_ctx.clone(), move |ctx| {
-            if ctx.user.is_none() {
+            if !ctx.is_loading && ctx.user.is_none() {
                 navigator.push(&Route::Login);
+            }
+            if ![PASSWORD, TOKEN, API_KEY, SSH_KEY].contains(&props_id) {
+                navigator.push(&Route::Dashboard);
             }
             else {
                 let mut new_request = (*key_request).clone();

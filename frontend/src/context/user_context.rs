@@ -10,6 +10,7 @@ use crate::services::auth;
 pub struct UserContext {
     pub user: Option<User>,
     pub set_user: Callback<Option<User>>,
+    pub is_loading: bool,
 }
 
 #[derive(Properties, PartialEq)]
@@ -20,6 +21,7 @@ pub struct ProviderProps {
 #[function_component(UserContextProvider)]
 pub fn user_context_provider(props: &ProviderProps) -> Html {
     let user = use_state(|| None::<User>);
+    let is_loading = use_state(|| true);
 
     let set_user = {
         let user = user.clone();
@@ -28,10 +30,19 @@ pub fn user_context_provider(props: &ProviderProps) -> Html {
         })
     };
 
+    let set_loading = {
+        let is_loading = is_loading.clone();
+        Callback::from(move |loading: bool| {
+            is_loading.set(loading);
+        })
+    };
+
     {
         let set_user = set_user.clone();
+        let set_loading = set_loading.clone();
 
         use_effect_with((), move |_| {
+            set_loading.emit(true);
             spawn_local(async move {
                 if let Ok(token) = storage::get_token() {
                     match auth::get_current_user(&token).await {
@@ -45,6 +56,7 @@ pub fn user_context_provider(props: &ProviderProps) -> Html {
                         }
                     }
                 }
+                set_loading.emit(false);
             });
             || ()
         });
@@ -53,6 +65,7 @@ pub fn user_context_provider(props: &ProviderProps) -> Html {
     let context = UserContext {
         user: (*user).clone(),
         set_user,
+        is_loading: *is_loading,
     };
 
     html! {

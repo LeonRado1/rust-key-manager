@@ -29,7 +29,7 @@ pub fn dashboard() -> Html {
         let navigator = navigator.clone();
 
         use_effect_with(user_ctx.clone(), move |ctx| {
-            if ctx.user.is_none() {
+            if !ctx.is_loading && ctx.user.is_none() {
                 navigator.push(&Route::Login);
             }
             else {
