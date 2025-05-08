@@ -504,13 +504,18 @@ pub fn key_detail(props: &Props) -> Html {
                                             }
                                         </div>
                                         <div class="mb-3">
-                                            <input
-                                                type="text"
-                                                class="form-control"
-                                                value={(*update_request).new_expiration_date.clone().unwrap_or_default()}
-                                                placeholder="YY/MM/DD hh:mm:ss"
-                                                oninput={on_expiration_change}
-                                            />
+                                            <div class="input-group">
+                                                <input
+                                                    type="text"
+                                                    class="form-control"
+                                                    value={(*update_request).new_expiration_date.clone().unwrap_or_default()}
+                                                    placeholder="YY/MM/DD hh:mm:ss"
+                                                    oninput={on_expiration_change}
+                                                />
+                                                <span class="input-group-text">
+                                                    <i class="bi bi-calendar2-event"></i>
+                                                </span>
+                                            </div>
                                         </div>
                                         <div class="d-flex gap-2">
                                             <button

@@ -201,10 +201,18 @@ pub fn dashboard() -> Html {
                         </div>
                     </div>
                     <div class="d-flex col-2 align-items-center justify-content-end gap-3">
-                        <Link<Route> to={Route::Revoked} classes="btn btn-link p-0">
+                        <Link<Route>
+                            to={Route::Revoked}
+                            classes="btn btn-sm btn-link p-0 text-secondary"
+                        >
+                            <i class="bi bi-x-circle me-1"></i>
                             {"Revoked"}
                         </Link<Route>>
-                        <Link<Route> to={Route::Expired} classes="btn btn-link p-0">
+                        <Link<Route>
+                            to={Route::Expired}
+                            classes="btn btn-sm btn-link p-0 text-secondary"
+                        >
+                            <i class="bi bi-clock me-1"></i>
                             {"Expired"}
                         </Link<Route>>
                     </div>

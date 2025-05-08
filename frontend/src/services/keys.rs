@@ -26,6 +26,42 @@ pub async fn get_keys(token: &str) -> Result<Vec<PartialKey>, String> {
     Ok(response)
 }
 
+pub async fn get_revoked_keys(token: &str) -> Result<Vec<PartialKey>, String> {
+    let client = Client::new();
+    let response = client.get("http://127.0.0.1:8000/keys/revoked")
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|_e| "Error while sending a request. Try again later.")?;
+
+    if let Some(error_message) = get_error_message_from_code(response.status()) {
+        return Err(error_message);
+    }
+
+    let response = response.json().await
+        .map_err(|_e| "Error while parsing response. Try again later.")?;
+
+    Ok(response)
+}
+
+pub async fn get_expired_keys(token: &str) -> Result<Vec<PartialKey>, String> {
+    let client = Client::new();
+    let response = client.get("http://127.0.0.1:8000/keys/expired")
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|_e| "Error while sending a request. Try again later.")?;
+
+    if let Some(error_message) = get_error_message_from_code(response.status()) {
+        return Err(error_message);
+    }
+
+    let response = response.json().await
+        .map_err(|_e| "Error while parsing response. Try again later.")?;
+
+    Ok(response)
+}
+
 pub async fn add_key(token: &str, key_request: KeyRequest) -> Result<(), String> {
     let client = Client::new();
     

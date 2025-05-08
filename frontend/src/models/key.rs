@@ -17,7 +17,7 @@ pub struct Key {
     pub is_revoked: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PartialKey {
     pub id: i32,
     pub key_name: String,
@@ -38,7 +38,7 @@ pub struct KeyRequest {
     pub expiration_date: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub struct UpdateKeyRequest {
     pub key_id: i32,
     pub new_password: Option<String>,
