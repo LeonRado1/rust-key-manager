@@ -1,19 +1,14 @@
+use bcrypt::verify;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::State;
 use sqlx::{PgPool, Row};
 use crate::middleware::LoggedUser;
-/// TODO:
-/// - Add password, email validation.
-/// - Implement tools for generation or encryption passwords, rotation.
-/// - Implement users management routes, delete user, etc.
-/// - Automatically analyze of relevance of users keys
-/// - Implement protections: CSRF, brut-force, http, requests, ...
-
-use crate::models::{AuthResponse, UpdateUserRequest, UpdateUserResponse, User};
+use crate::models::{AuthResponse, ChangeUserRequest, User};
 use crate::utils::jwt_token::generate_jwt_token;
+use crate::utils::validation::{validate_email, validate_username};
 
-#[get("/currentUser")]
+#[get("/")]
 async fn get_current_user(
     pool: &State<PgPool>,
     auth: LoggedUser
@@ -25,7 +20,7 @@ async fn get_current_user(
     )
     .fetch_one(pool.inner())
     .await
-    .map_err(|_| Status::InternalServerError)?;
+    .map_err(|_| Status::NotFound)?;
 
     let token = generate_jwt_token(user.id)
         .map_err(|_| Status::InternalServerError)?;
@@ -33,135 +28,165 @@ async fn get_current_user(
     Ok(Json(AuthResponse { user, token }))
 }
 
-/// Check if the user with given id exists in the database.
-pub async fn check_user_exists(pool: &PgPool, user_id: i32) -> Result<(), Status> {
-    let user_exists = sqlx::query("SELECT 1 FROM users WHERE id = $1")
-        .bind(user_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| {
-            eprintln!("Database error: {:?}", e);
-            Status::InternalServerError
-        })?;
+#[put("/", data = "<request_data>")]
+async fn change_user(
+    pool: &State<PgPool>,
+    request_data: Json<ChangeUserRequest>,
+    auth: LoggedUser
+) -> Result<Json<User>, Status> {
+    let record = sqlx::query!(
+        "SELECT id, username, email, password_hash
+         FROM users
+         WHERE id = $1",
+        auth.0
+    )
+    .fetch_one(pool.inner())
+    .await
+    .map_err(|_| Status::NotFound)?;
 
-    if user_exists.is_none() {
+    let is_valid_password = verify(&request_data.password, &record.password_hash)
+        .map_err(|_| Status::InternalServerError)?;
+
+    if !is_valid_password {
+        return Err(Status::Unauthorized);
+    }
+    
+    let email = request_data.email.clone();
+    let username = request_data.username.clone();
+    
+    if let Some(new_email) = &email {
+        if let Err(_e) = validate_email(&new_email) {
+            return Err(Status::ExpectationFailed);
+        };
+        
+        if new_email != &record.email {
+            let email_exists = sqlx::query(
+                "SELECT 1 FROM users WHERE email = $1 AND id != $2"
+            )
+            .bind(new_email)
+            .bind(auth.0)
+            .fetch_optional(pool.inner())
+            .await
+            .map_err(|_| Status::InternalServerError)?;
+
+            if email_exists.is_some() {
+                return Err(Status::Conflict);
+            }
+        }
+        else {
+            return Err(Status::Conflict);
+        }
+    }
+    
+    if let Some(new_username) = &username {
+        if let Err(_e) = validate_username(&new_username) {
+            return Err(Status::ExpectationFailed);
+        };
+        
+        if new_username != &record.username {
+            let username_exists = sqlx::query(
+                "SELECT 1 FROM users WHERE username = $1 AND id != $2"
+            )
+                .bind(new_username)
+                .bind(auth.0)
+                .fetch_optional(pool.inner())
+                .await
+                .map_err(|_| Status::InternalServerError)?;
+
+            if username_exists.is_some() {
+                return Err(Status::Conflict);
+            }
+        }
+        else {
+            return Err(Status::Conflict);
+        }
+    }
+
+    let updated_user = sqlx::query_as!(
+        User,
+        "UPDATE users 
+         SET 
+             username = COALESCE($1, username),
+             email = COALESCE($2, email)
+         WHERE id = $3
+         RETURNING id, username, email",
+        username,
+        email,
+        auth.0
+    )
+    .fetch_one(pool.inner())
+    .await
+    .map_err(|_| Status::InternalServerError)?;
+
+    Ok(Json(updated_user))
+}
+
+#[delete("/", data = "<request_data>")]
+async fn delete_user(
+    pool: &State<PgPool>,
+    request_data: Json<ChangeUserRequest>,
+    auth: LoggedUser
+) -> Result<(), Status> {
+    let record = sqlx::query!(
+        "SELECT id, username, email, password_hash
+         FROM users
+         WHERE id = $1",
+        auth.0
+    )
+    .fetch_one(pool.inner())
+    .await
+    .map_err(|_| Status::NotFound)?;
+
+    let is_valid_password = verify(&request_data.password, &record.password_hash)
+        .map_err(|_| Status::InternalServerError)?;
+
+    if !is_valid_password {
         return Err(Status::Unauthorized);
     }
 
+    let mut tx = pool.inner()
+        .begin()
+        .await
+        .map_err(|_| Status::InternalServerError)?;
+    
+    sqlx::query!(
+        "DELETE FROM recovery_codes 
+         WHERE user_id = $1",
+        auth.0
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|_| Status::InternalServerError)?;
+    
+    sqlx::query!(
+        "DELETE FROM keys 
+         WHERE user_id = $1",
+        auth.0
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|_| Status::InternalServerError)?;
+    
+    sqlx::query!(
+        "DELETE FROM users 
+         WHERE id = $1",
+        auth.0
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|_| Status::InternalServerError)?;
+    
+    tx.commit()
+        .await
+        .map_err(|_| Status::InternalServerError)?;
+
     Ok(())
-}
-
-/// Update user email
-/// # Body Parameters:
-/// - `email`: new email
-#[patch("/email", data = "<request_data>")]
-async fn change_email(
-    pool: &State<PgPool>,
-    request_data: Json<UpdateUserRequest>,
-    auth: LoggedUser
-) -> Result<Json<UpdateUserResponse>, Status> {
-    let new_email = match &request_data.email {
-        Some(email) => email,
-        None => {
-            eprintln!("Email is required");
-            return Err(Status::BadRequest);
-        }
-    };
-
-    // Check if the user with given gmail exists(email was taken by another user)
-    let email_exists = sqlx::query(
-        "SELECT 1
-         FROM users
-         WHERE email = $1 AND id != $2"
-    )
-    .bind(new_email)
-    .bind(auth.0)
-    .fetch_optional(pool.inner())
-    .await
-    .map_err(|e| {
-        eprintln!("Database error: {:?}", e);
-        Status::InternalServerError
-    })?;
-
-    if email_exists.is_some() { return Err(Status::Conflict); }
-
-   // Update email
-    let updated = sqlx::query(
-        "UPDATE users SET email = $1 WHERE id = $2"
-    )
-    .bind(new_email)
-    .bind(auth.0)
-    .execute(pool.inner())
-    .await
-    .map_err(|e| {
-        eprintln!("Database error: {:?}", e);
-        Status::InternalServerError
-    })?;
-
-    if updated.rows_affected() == 0 { return Err(Status::NotFound); }
-
-    Ok(Json(UpdateUserResponse {
-        message: "Email updated successfully".to_string(),
-    }))
-}
-
-/// Update user username
-/// # Body Parameters:
-/// - `username`: new username
-#[patch("/username", data = "<request_data>")]
-async fn change_username(
-    pool: &State<PgPool>,
-    request_data: Json<UpdateUserRequest>,
-    auth: LoggedUser
-) -> Result<Json<UpdateUserResponse>, Status> {
-    let new_username = match &request_data.username {
-        Some(username) => username,
-        None => {
-            eprintln!("Username is required");
-            return Err(Status::BadRequest);
-        }
-    };
-
-    let username_exists = sqlx::query(
-        "SELECT 1
-         FROM users
-         WHERE username = $1 AND id != $2"
-    )
-    .bind(new_username)
-    .bind(auth.0)
-    .fetch_optional(pool.inner())
-    .await
-    .map_err(|e| {
-        eprintln!("Database error: {:?}", e);
-        Status::InternalServerError
-    })?;
-
-    if username_exists.is_some() { return Err(Status::Conflict); }
-
-    // Update username
-    let updated = sqlx::query(
-        "UPDATE users SET username = $1 WHERE id = $2"
-    )
-    .bind(new_username)
-    .bind(auth.0)
-    .execute(pool.inner())
-    .await
-    .map_err(|e| {
-        eprintln!("Database error: {:?}", e);
-        Status::InternalServerError
-    })?;
-
-    if updated.rows_affected() == 0 { return Err(Status::NotFound); }
-
-    Ok(Json(UpdateUserResponse {
-        message: "Username updated successfully".to_string(),
-    }))
 }
 
 pub fn routes() -> Vec<rocket::Route> {
     routes![
         get_current_user,
-        change_email,
-        change_username
+        change_user,
+        delete_user,
     ]
 }

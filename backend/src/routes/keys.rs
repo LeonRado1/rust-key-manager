@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{Local, NaiveDateTime};
 use rocket::form::Form;
 use rocket::serde::json::Json;
 use rocket::http::{Header, Status};
@@ -19,19 +19,20 @@ async fn get_keys(
     let keys = sqlx::query_as!(
         PartialKey,
         "SELECT keys.id, key_name, key_description, key_type_id, key_type, key_tag, expiration_date
-         FROM keys 
-         JOIN key_types 
+         FROM keys
+         JOIN key_types
             ON key_types.id = keys.key_type_id
          WHERE user_id = $1
-           AND (expiration_date IS NULL OR expiration_date > CURRENT_TIMESTAMP)
+           AND (expiration_date IS NULL OR expiration_date > $2)
            AND is_revoked = false
          ORDER BY COALESCE(updated_at, created_at) DESC;",
-        auth.0
+        auth.0,
+        Local::now().naive_local()
     )
     .fetch_all(pool.inner())
     .await
     .map_err(|_e| { Status::InternalServerError })?;
-    
+
     Ok(Json(keys))
 }
 
@@ -106,9 +107,10 @@ async fn get_expired_keys(
          FROM keys
          JOIN key_types
             ON key_types.id = keys.key_type_id
-         WHERE user_id = $1 AND expiration_date < CURRENT_TIMESTAMP AND is_revoked = false
+         WHERE user_id = $1 AND expiration_date < $2 AND is_revoked = false
          ORDER BY COALESCE(updated_at, created_at) DESC;",
-        auth.0
+        auth.0,
+        Local::now().naive_local()
     )
     .fetch_all(pool.inner())
     .await
@@ -201,7 +203,7 @@ async fn create_key(
             let date = NaiveDateTime::parse_from_str(&date_str, "%y/%m/%d %H:%M:%S")
                 .map_err(|_| Status::ExpectationFailed)?;
 
-            if date < chrono::Utc::now().naive_utc() {
+            if date < Local::now().naive_local() {
                 return Err(Status::ExpectationFailed);
             }
 
@@ -520,7 +522,7 @@ async fn extend_key(
             let date = NaiveDateTime::parse_from_str(date_str, "%y/%m/%d %H:%M:%S")
                 .map_err(|_| Status::ExpectationFailed)?;
 
-            if date < chrono::Utc::now().naive_utc() {
+            if date < Local::now().naive_local() {
                 return Err(Status::ExpectationFailed);
             }
 
@@ -579,7 +581,7 @@ async fn extend_rotate_key(
             let date = NaiveDateTime::parse_from_str(date_str, "%y/%m/%d %H:%M:%S")
                 .map_err(|_| Status::ExpectationFailed)?;
 
-            if date < chrono::Utc::now().naive_utc() {
+            if date < Local::now().naive_local() {
                 return Err(Status::ExpectationFailed);
             }
 

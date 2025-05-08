@@ -6,7 +6,7 @@ use crate::models::user::User;
 use crate::helpers::storage;
 use crate::services::auth;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct UserContext {
     pub user: Option<User>,
     pub set_user: Callback<Option<User>>,

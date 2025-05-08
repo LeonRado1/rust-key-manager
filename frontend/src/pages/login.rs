@@ -3,7 +3,7 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlInputElement;
 use regex::Regex;
 use yew_router::hooks::use_navigator;
-
+use yew_router::prelude::Link;
 use crate::components::app_router::Route;
 use crate::context::user_context::use_user_context;
 use crate::helpers::storage;
@@ -120,7 +120,7 @@ pub fn login() -> Html {
                         oninput={oninput_email_address}
                     />
                 </div>
-                <div class="mb-3">
+                <div class="mb-4">
                     <label class="form-label" for="password">{ "Password" }</label>
                     <input
                         id="password"
@@ -132,14 +132,25 @@ pub fn login() -> Html {
                 </div>
                 <div class="text-center">
                     <button
-                        class="btn btn-outline-success mx-auto"
+                        class="btn btn-outline-success mx-auto w-50"
                         type="button"
                         disabled={is_invalid}
                         onclick={on_login}
                     >
-                        <i class="bi bi-box-arrow-in-right me-1"></i>
+                        <i class="bi bi-box-arrow-in-right me-2"></i>
                         { "Login" }
                     </button>
+                </div>
+                <div class="mt-3 d-flex align-items-center gap-1">
+                    <span>
+                        {"Forgot your password?"}
+                    </span>
+                    <Link<Route>
+                        to={Route::ChangePwd}
+                        classes="btn btn-link p-0"
+                    >
+                        {"Click here to reset."}
+                    </Link<Route>>
                 </div>
                 if !error_message.is_empty() {
                     <div class="alert alert-danger mt-3">

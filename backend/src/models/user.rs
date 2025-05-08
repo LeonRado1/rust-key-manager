@@ -1,6 +1,4 @@
 use serde::{Serialize, Deserialize};
-// use uuid::Uuid; //TODO implement uuid?
-use chrono::NaiveDateTime;
 use sqlx::FromRow;
 
 #[derive(Serialize, Deserialize, FromRow)]
@@ -18,14 +16,9 @@ pub struct RegisterRequest {
 }
 
 #[derive(Deserialize)]
-pub struct UpdateUserRequest {
-    pub username: Option<String>,
-    pub email: Option<String>
-}
-
-#[derive(Serialize)]
-pub struct UpdateUserResponse {
-    pub message: String,
+pub struct LoginRequest {
+    pub email: String,
+    pub password: String
 }
 
 #[derive(Serialize, Deserialize, FromRow)]
@@ -34,8 +27,16 @@ pub struct AuthResponse {
     pub token: String,
 }
 
+
 #[derive(Deserialize)]
-pub struct LoginRequest {
+pub struct ChangePasswordRequest {
     pub email: String,
-    pub password: String
+    pub recovery_code: String,
+}
+
+#[derive(Deserialize)]
+pub struct ChangeUserRequest {
+    pub email: Option<String>,
+    pub username: Option<String>,
+    pub password: String,
 }

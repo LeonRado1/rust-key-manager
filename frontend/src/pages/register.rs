@@ -173,7 +173,7 @@ pub fn register() -> Html {
                         oninput={oninput_password}
                     />
                 </div>
-                <div class="mb-3">
+                <div class="mb-4">
                     <label class="form-label" for="confirm-password">{ "Confirm Password" }</label>
                     <input
                         id="confirm-password"
@@ -185,12 +185,12 @@ pub fn register() -> Html {
                 </div>
                 <div class="text-center">
                     <button
-                        class="btn btn-outline-success mx-auto"
+                        class="btn btn-outline-success mx-auto w-50"
                         type="button"
                         disabled={is_invalid}
                         onclick={on_register}
                     >
-                        <i class="bi bi-person-plus me-1"></i>
+                        <i class="bi bi-person-plus me-2"></i>
                         { "Register" }
                     </button>
                 </div>

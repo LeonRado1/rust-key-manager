@@ -7,6 +7,8 @@ use rocket::{Request, State};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use jsonwebtoken::{encode, Header, EncodingKey, DecodingKey, decode, Validation};
 use chrono::{Duration, Utc};
+use rand::Rng;
+use rand::rngs::OsRng;
 use rocket::request::{FromRequest, Outcome};
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
@@ -87,6 +89,28 @@ async fn register(
             _ => Status::InternalServerError
         }
     })?;
+
+    const CHARS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let mut rng = OsRng;
+    
+    for _ in 0..3 {
+        let recovery_code: String = (0..12)
+            .map(|_| {
+                let idx = rng.gen_range(0..CHARS.len());
+                CHARS[idx] as char
+            })
+            .collect();
+
+        sqlx::query!(
+            "INSERT INTO recovery_codes (user_id, code)
+             VALUES ($1, $2)",
+            record.id,
+            recovery_code
+        )
+        .execute(pool.inner())
+        .await
+        .map_err(|_| Status::InternalServerError)?;
+    }
 
     let token = generate_jwt_token(record.id)
         .map_err(|_| Status::InternalServerError)?;
