@@ -337,7 +337,7 @@ async fn rotate_key(
 
         let encrypted_data = encrypt(&private_key, &record.password_hash)?;
 
-        let date = chrono::Utc::now().naive_utc();
+        let date = Local::now().naive_utc();
 
         sqlx::query!(
             "UPDATE keys
@@ -369,7 +369,7 @@ async fn rotate_key(
 
         let encrypted_data = encrypt(&generated, &record.password_hash)?;
 
-        let date = chrono::Utc::now().naive_utc();
+        let date = Local::now().naive_utc();
 
         sqlx::query!(
             "UPDATE keys
@@ -413,8 +413,9 @@ async fn revoke_key(
 
     sqlx::query!(
         "UPDATE keys
-         SET is_revoked = true, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1",
+         SET is_revoked = true, updated_at = $1
+         WHERE id = $2",
+        Local::now().naive_utc(),
         key_id
     )
     .execute(pool.inner())
@@ -470,7 +471,7 @@ async fn change_key(
 
     let encrypted_data = encrypt(new_password, &record.password_hash)?;
 
-    let date = chrono::Utc::now().naive_utc();
+    let date = Local::now().naive_utc();
 
     sqlx::query!(
         "UPDATE keys
@@ -531,7 +532,7 @@ async fn extend_key(
         None => return Err(Status::BadRequest)
     };
 
-    let date = chrono::Utc::now().naive_utc();
+    let date = Local::now().naive_utc();
 
     sqlx::query!(
         "UPDATE keys
@@ -604,7 +605,7 @@ async fn extend_rotate_key(
 
     let encrypted_data = encrypt(&generated, &record.password_hash)?;
 
-    let date = chrono::Utc::now().naive_utc();
+    let date = Local::now().naive_utc();
 
     sqlx::query!(
         "UPDATE keys

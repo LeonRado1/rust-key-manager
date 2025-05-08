@@ -30,6 +30,7 @@ pub struct AuthResponse {
 pub struct ChangePasswordRequest {
     pub email: String,
     pub recovery_code: String,
+    pub new_password: String,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]

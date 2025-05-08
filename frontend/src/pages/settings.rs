@@ -57,8 +57,6 @@ pub fn settings() -> Html {
     let on_password_change = {
         let change_request = change_request.clone();
 
-        let change_request = change_request.clone();
-
         Callback::from(move |e: InputEvent| {
             let input: HtmlInputElement = e.target_unchecked_into();
             let mut details = (*change_request).clone();

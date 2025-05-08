@@ -1,6 +1,6 @@
 use reqwest::Client;
 use crate::helpers::error_codes::get_error_message_from_code;
-use crate::models::user::{RegisterRequest, LoginRequest, AuthResponse, ChangeUserRequest, User};
+use crate::models::user::{RegisterRequest, LoginRequest, AuthResponse, ChangeUserRequest, User, ChangePasswordRequest};
 
 pub async fn register(data: RegisterRequest) -> Result<AuthResponse, String> {
     let client = Client::new();
@@ -94,5 +94,20 @@ pub async fn delete_user(
         return Err(error_message);
     }
     
+    Ok(())
+}
+
+pub async fn change_password(data: ChangePasswordRequest) -> Result<(), String> {
+    let client = Client::new();
+    let response = client.put("http://127.0.0.1:8000/auth/change-password")
+        .json(&data)
+        .send()
+        .await
+        .map_err(|_e| "Error while sending request. Try again later.")?;
+
+    if let Some(error_message) = get_error_message_from_code(response.status()) {
+        return Err(error_message);
+    }
+
     Ok(())
 }
