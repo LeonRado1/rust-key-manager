@@ -10,8 +10,8 @@ CREATE TABLE users (
 
 CREATE TABLE key_types (
     id SERIAL PRIMARY KEY,
-    key_type VARCHAR(15) NOT NULL,
-)
+    key_type VARCHAR(15) NOT NULL
+);
 
 CREATE TABLE keys (
     id SERIAL PRIMARY KEY,
@@ -35,4 +35,4 @@ CREATE TABLE recovery_codes (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     code VARCHAR(15) NOT NULL,
     is_used BOOLEAN NOT NULL DEFAULT false
-)
+);

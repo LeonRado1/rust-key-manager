@@ -1,10 +1,12 @@
 use bcrypt::verify;
+use chrono::Local;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::State;
 use sqlx::{PgPool, Row};
 use crate::middleware::LoggedUser;
 use crate::models::{AuthResponse, ChangeUserRequest, User};
+use crate::services::{enqueue_email, EmailRequest, GLOBAL_SENDER_EMAIL};
 use crate::utils::jwt_token::generate_jwt_token;
 use crate::utils::validation::{validate_email, validate_username};
 
@@ -179,6 +181,25 @@ async fn delete_user(
     tx.commit()
         .await
         .map_err(|_| Status::InternalServerError)?;
+
+    let email_body = format!(
+        "We're sorry to see you go. Your account has been successfully deleted.\n\
+        - Time: {}\n\n\
+        Important Security Notes:\n\
+        - All your keys have been permanently deleted\n\
+        - Your recovery codes have been invalidated\n\
+        - Your personal data has been removed from our systems\n",
+        Local::now().format("%Y-%m-%d %H:%M:%S")
+    );
+
+    let email_request = EmailRequest {
+        sender: GLOBAL_SENDER_EMAIL.to_string(),
+        recipient: record.email,
+        subject: "Account Successfully Deleted👋".to_string(),
+        body: email_body,
+    };
+
+    enqueue_email(email_request).await;
 
     Ok(())
 }

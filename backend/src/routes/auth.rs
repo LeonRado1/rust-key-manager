@@ -6,7 +6,7 @@ use rocket::http::Status;
 use rocket::{Request, State};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use jsonwebtoken::{encode, Header, EncodingKey, DecodingKey, decode, Validation};
-use chrono::{Duration, Utc};
+use chrono::{Duration, Local, Utc};
 use rand::Rng;
 use rand::rngs::OsRng;
 use rocket::request::{FromRequest, Outcome};
@@ -14,7 +14,7 @@ use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 use crate::middleware::LoggedUser;
 use crate::models::*;
-use crate::services::{decrypt, encrypt, enqueue_email};
+use crate::services::{decrypt, encrypt, enqueue_email, EmailRequest, GLOBAL_SENDER_EMAIL};
 use crate::utils::jwt_token::generate_jwt_token;
 use crate::utils::validation::{validate_email, validate_password, validate_username};
 
@@ -92,7 +92,9 @@ async fn register(
 
     const CHARS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     let mut rng = OsRng;
-    
+
+    let mut recovery_codes = Vec::new();
+
     for _ in 0..3 {
         let recovery_code: String = (0..12)
             .map(|_| {
@@ -110,7 +112,31 @@ async fn register(
         .execute(pool.inner())
         .await
         .map_err(|_| Status::InternalServerError)?;
+
+        recovery_codes.push(recovery_code);
     }
+
+    let email_body = format!(
+        "Welcome to Key Manager, {}!\n\
+        Your account has been successfully created. Here are your recovery codes.\
+        Please store them safely as they will be needed if you ever need to reset your password:\n\n\
+        {}\n\n\
+        Important:\n\
+        - Each code can only be used once\n\
+        - Store these codes in a secure location\n\
+        - Don't share these codes with anyone\n",
+        record.username,
+        recovery_codes.join("\n")
+    );
+
+    let email_request = EmailRequest {
+        sender: GLOBAL_SENDER_EMAIL.to_string(),
+        recipient: record.email.clone(),
+        subject: "Welcome to Key Manager🔐".to_string(),
+        body: email_body,
+    };
+
+    enqueue_email(email_request).await;
 
     let token = generate_jwt_token(record.id)
         .map_err(|_| Status::InternalServerError)?;
@@ -212,7 +238,26 @@ async fn change_password(
     tx.commit()
         .await
         .map_err(|_| Status::InternalServerError)?;
-    
+
+    let email_body = format!(
+        "Your account password was recently changed using a recovery code.\n\
+        - Time: {}\n\
+        - Recovery Code Used: {}\n\n\
+        Important:\n\
+        If you did not initiate this password change, please contact our support team.\n",
+        Local::now().format("%Y-%m-%d %H:%M:%S"),
+        &request_data.recovery_code
+    );
+
+    let email_request = EmailRequest {
+        sender: GLOBAL_SENDER_EMAIL.to_string(),
+        recipient: user.email,
+        subject: "Password Change Alert🚨".to_string(),
+        body: email_body,
+    };
+
+    enqueue_email(email_request).await;
+
     Ok(())
 }
 

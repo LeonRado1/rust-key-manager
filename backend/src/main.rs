@@ -9,12 +9,14 @@ use rocket::http::Method;
 use rocket_cors::{AllowedOrigins, CorsOptions, AllowedHeaders};
 use routes::*;
 use services::*;
+use crate::scheduler::init_scheduler;
 
 mod models;
 mod routes;
 mod services;
 mod middleware;
 mod utils;
+mod scheduler;
 
 #[get("/")]
 async fn index() -> String {
@@ -38,6 +40,8 @@ async fn rocket() -> _ {
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     
     let pool = create_db_pool(&database_url);
+
+    init_scheduler(pool.clone()).await;
 
     let cors = CorsOptions {
         allowed_origins: AllowedOrigins::all(),
