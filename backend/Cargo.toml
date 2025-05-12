@@ -31,3 +31,4 @@ hex = "0.4.3"
 garde = { version = "0.22", features = ["derive", "email", "regex"] }
 serde_json = "1.0.140"
 tokio-cron-scheduler = "0.13.0"
+dashmap = "6.1.0"

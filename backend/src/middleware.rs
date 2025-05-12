@@ -1,4 +1,7 @@
 use std::env;
+use std::time::{Duration, Instant};
+use dashmap::DashMap;
+use once_cell::sync::Lazy;
 use rocket::http::Status;
 use rocket::Request;
 use rocket::request::{FromRequest, Outcome};
@@ -36,4 +39,42 @@ impl<'r> FromRequest<'r> for LoggedUser {
             Err(_) => Outcome::Error((Status::Unauthorized, "Invalid or expired token")),
         }
     }
+}
+
+static REQUEST_ATTEMPTS: Lazy<DashMap<String, (u32, Instant)>> = Lazy::new(DashMap::new);
+
+const MAX_REQUEST_ATTEMPTS: u32 = 5;
+const LOCKOUT_DURATION: Duration = Duration::from_secs(300);
+
+pub struct RequestLimitGuard(pub String);
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for RequestLimitGuard {
+    type Error = &'static str;
+
+    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+        let ip = request.client_ip().map(|ip| ip.to_string()).unwrap_or("unknown".into());
+
+        if let Some((count, last)) = REQUEST_ATTEMPTS.get(&ip).map(|e| *e.value()) {
+            if count >= MAX_REQUEST_ATTEMPTS && last.elapsed() < LOCKOUT_DURATION {
+                return Outcome::Error((Status::TooManyRequests, "Too many requests from this IP address"));
+            }
+        }
+
+        Outcome::Success(RequestLimitGuard(ip))
+    }
+}
+
+pub fn record_failed_attempt(ip_address: &str) {
+    let now = Instant::now();
+    REQUEST_ATTEMPTS.entry(ip_address.to_string())
+        .and_modify(|e| {
+            e.0 += 1;
+            e.1 = now;
+        })
+        .or_insert((1, now));
+}
+
+pub fn reset_limit_attempts(ip_address: &str) {
+    REQUEST_ATTEMPTS.remove(ip_address);
 }

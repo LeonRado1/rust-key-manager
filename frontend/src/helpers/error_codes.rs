@@ -15,6 +15,7 @@ pub fn get_error_message_from_code(status: StatusCode) -> Option<String>
         StatusCode::CONFLICT => "A user with the same email or username already exists.",
         StatusCode::UNPROCESSABLE_ENTITY => "The password is too short or not enough complex.",
         StatusCode::EXPECTATION_FAILED => "Values you provided are not in correct format and need to be changed.",
+        StatusCode::TOO_MANY_REQUESTS => "You have exceeded the rate limit. Please try again after 5 minutes.",
         _ => "An unexpected error occurred. Please try again later.",
     };
 

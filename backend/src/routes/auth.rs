@@ -12,7 +12,7 @@ use rand::rngs::OsRng;
 use rocket::request::{FromRequest, Outcome};
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
-use crate::middleware::LoggedUser;
+use crate::middleware::{record_failed_attempt, reset_limit_attempts, LoggedUser, RequestLimitGuard};
 use crate::models::*;
 use crate::services::{decrypt, encrypt, enqueue_email, EmailRequest, GLOBAL_SENDER_EMAIL};
 use crate::utils::jwt_token::generate_jwt_token;
@@ -21,7 +21,8 @@ use crate::utils::validation::{validate_email, validate_password, validate_usern
 #[post("/login", data = "<request_data>")]
 async fn login(
     pool: &State<PgPool>,
-    request_data: Json<LoginRequest>
+    request_data: Json<LoginRequest>,
+    ip: RequestLimitGuard
 ) -> Result<Json<AuthResponse>, Status> {
     let record = sqlx::query!(
         "SELECT id, username, password_hash, email FROM users WHERE email = $1",
@@ -34,9 +35,12 @@ async fn login(
     let is_valid_password = verify(&request_data.password, &record.password_hash)
         .map_err(|_| Status::InternalServerError)?;
     
-    if !is_valid_password { 
+    if !is_valid_password {
+        record_failed_attempt(&ip.0);
         return Err(Status::Unauthorized); 
     }
+    
+    reset_limit_attempts(&ip.0);
 
     let token = generate_jwt_token(record.id)
         .map_err(|_| Status::InternalServerError)?;
@@ -153,7 +157,8 @@ async fn register(
 #[put("/change-password", data = "<request_data>")]
 async fn change_password(
     pool: &State<PgPool>,
-    request_data: Json<ChangePasswordRequest>
+    request_data: Json<ChangePasswordRequest>,
+    ip: RequestLimitGuard
 ) -> Result<(), Status> {
     let user = sqlx::query!(
         "SELECT id, username, password_hash, email FROM users WHERE email = $1",
@@ -169,9 +174,17 @@ async fn change_password(
         user.id,
         &request_data.recovery_code
     )
-    .fetch_one(pool.inner())
+    .fetch_optional(pool.inner())
     .await
-    .map_err(|_| Status::Unauthorized)?;
+    .map_err(|_| Status::InternalServerError)?;
+    
+    if code.is_none() {
+        record_failed_attempt(&ip.0);
+        return Err(Status::Unauthorized);
+    }
+    
+    reset_limit_attempts(&ip.0);
+    let code = code.unwrap();
 
     if let Err(_e) = validate_password(&request_data.new_password) {
         return Err(Status::UnprocessableEntity);
