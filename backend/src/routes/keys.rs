@@ -1,9 +1,9 @@
 use chrono::{Local, NaiveDateTime};
 use rocket::form::Form;
 use rocket::serde::json::Json;
-use rocket::http::{Header, Status};
+use rocket::http::Status;
 use sqlx::PgPool;
-use rocket::{Response, State};
+use rocket::State;
 use tokio::io::AsyncReadExt;
 use crate::middleware::LoggedUser;
 use crate::models::{Key, PartialKey, KeyRequest, ImportKeyForm, UpdateKeyRequest};
@@ -153,9 +153,9 @@ async fn create_key(
                         user_id, key_name, key_value, key_description, key_type_id, key_tag, key_pair_value, salt, nonce
                      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
                     auth.0,
-                    request_data.key_name, 
-                    encrypted_data.ciphertext, 
-                    request_data.key_description, 
+                    request_data.key_name,
+                    encrypted_data.ciphertext,
+                    request_data.key_description,
                     request_data.key_type_id,
                     request_data.key_tag,
                     public_key,
@@ -216,10 +216,10 @@ async fn create_key(
                     "INSERT INTO keys (
                         user_id, key_name, key_value, key_description, key_type_id, key_tag, expiration_date, salt, nonce
                      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-                    auth.0, 
-                    request_data.key_name, 
-                    encrypted_data.ciphertext, 
-                    request_data.key_description, 
+                    auth.0,
+                    request_data.key_name,
+                    encrypted_data.ciphertext,
+                    request_data.key_description,
                     request_data.key_type_id,
                     request_data.key_tag,
                     expiration_date,

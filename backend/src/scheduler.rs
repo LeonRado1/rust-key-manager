@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use tokio_cron_scheduler::{JobScheduler, Job};
-use std::env;
 use std::error::Error;
 use std::time::Duration;
 use chrono::{Local, NaiveDateTime};
@@ -24,11 +23,11 @@ pub async fn check_keys_relevance(pool: PgPool) -> Result<JobScheduler, Box<dyn 
         let pool = pool.clone();
         
         Box::pin(async move {
-            println!("Scheduler is running at: {}", chrono::Local::now());
+            println!("Scheduler is running at: {}", Local::now());
             
             match check_and_notify_keys(&pool).await {
                 Ok(_) => println!("Key relevance check completed successfully."),
-                Err(e) => eprintln!("Error during key relevance check."),
+                Err(_e) => eprintln!("Error during key relevance check."),
             }
         })
     })?).await?;

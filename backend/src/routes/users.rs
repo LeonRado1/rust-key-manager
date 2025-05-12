@@ -3,7 +3,7 @@ use chrono::Local;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::State;
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 use crate::middleware::LoggedUser;
 use crate::models::{AuthResponse, ChangeUserRequest, User};
 use crate::services::{enqueue_email, EmailRequest, GLOBAL_SENDER_EMAIL};

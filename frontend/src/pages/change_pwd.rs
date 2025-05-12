@@ -6,9 +6,7 @@ use yew_router::hooks::use_navigator;
 use yew_router::prelude::Link;
 use crate::components::app_router::Route;
 use crate::context::user_context::use_user_context;
-use crate::helpers::storage;
-use crate::helpers::string_utils::string_or_none;
-use crate::models::user::{ChangePasswordRequest, ChangeUserRequest};
+use crate::models::user::ChangePasswordRequest;
 use crate::services::auth;
 
 #[function_component(ChangePwd)]

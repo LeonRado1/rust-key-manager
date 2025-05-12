@@ -1,7 +1,6 @@
 use std::rc::Rc;
 use yew::prelude::*;
 use wasm_bindgen_futures::spawn_local;
-
 use crate::models::user::User;
 use crate::helpers::storage;
 use crate::services::auth;

@@ -3,7 +3,6 @@ use yew_router::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlInputElement;
 use regex::Regex;
-
 use crate::components::app_router::Route;
 use crate::services::auth;
 use crate::models::user::RegisterRequest;

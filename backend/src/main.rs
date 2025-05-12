@@ -1,7 +1,5 @@
 #[macro_use] extern crate rocket;
 
-use rocket::serde::json::Json;
-use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use std::env;

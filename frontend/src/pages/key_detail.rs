@@ -1,14 +1,14 @@
-use web_sys::{window, File, HtmlInputElement};
+use web_sys::HtmlInputElement;
 use yew::platform::spawn_local;
 use yew::prelude::*;
 use yew_router::hooks::use_navigator;
 use crate::components::app_router::Route;
-use crate::constants::key_types::{PASSWORD, SSH_KEY, get_type_name, get_type_class, TOKEN};
+use crate::constants::key_types::{PASSWORD, SSH_KEY, get_type_name, get_type_class};
 use crate::context::user_context::use_user_context;
 use crate::helpers::date::{format_date, DateStatus, validate_date};
 use crate::helpers::storage;
 use crate::helpers::string_utils::{copy_to_clipboard, generate_password, string_or_none};
-use crate::models::key::{Key, KeyRequest, UpdateKeyRequest};
+use crate::models::key::{Key, UpdateKeyRequest};
 use crate::services::keys;
 
 #[derive(Properties, PartialEq)]

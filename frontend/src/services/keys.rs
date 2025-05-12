@@ -1,10 +1,9 @@
 use js_sys::Uint8Array;
 use reqwest::Client;
 use reqwest::multipart::Form;
-use wasm_bindgen::{JsCast, JsValue, UnwrapThrowExt};
+use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, BlobPropertyBag, File, HtmlAnchorElement, Url};
-use yew::BaseComponent;
 use crate::helpers::error_codes::get_error_message_from_code;
 use crate::models::key::{Key, KeyRequest, PartialKey, UpdateKeyRequest};
 

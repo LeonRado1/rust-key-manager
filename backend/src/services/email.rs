@@ -1,5 +1,4 @@
 use lettre::{Message, SmtpTransport, Transport};
-use lettre::transport::smtp::authentication::Credentials;
 use std::env;
 use tokio::sync::mpsc::{Sender, Receiver};
 use once_cell::sync::OnceCell;

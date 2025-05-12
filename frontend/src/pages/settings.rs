@@ -8,7 +8,7 @@ use crate::context::user_context::use_user_context;
 use crate::helpers::storage;
 use crate::helpers::string_utils::string_or_none;
 use crate::models::user::{ChangeUserRequest, User};
-use crate::services::{auth, keys};
+use crate::services::auth;
 
 #[function_component(Settings)]
 pub fn settings() -> Html {

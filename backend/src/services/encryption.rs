@@ -6,8 +6,6 @@ use rand::rngs::OsRng;
 use ring::rand::SecureRandom;
 use rocket::http::Status;
 use ssh_key::{Algorithm, LineEnding, PrivateKey};
-use ssh_key::HashAlg::Sha256;
-use ssh_key::private::Ed25519PrivateKey;
 
 pub struct EncryptedData {
     pub ciphertext: String,
