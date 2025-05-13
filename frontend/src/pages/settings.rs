@@ -16,6 +16,7 @@ pub fn settings() -> Html {
 
     let error_message = use_state(|| String::new());
     let success_message = use_state(|| String::new());
+    let show_delete_modal = use_state(|| false);
 
     let user_ctx = use_user_context();
     let navigator = use_navigator().unwrap();
@@ -128,6 +129,7 @@ pub fn settings() -> Html {
 
         let success_message = success_message.clone();
         let error_message = error_message.clone();
+        let show_delete_modal = show_delete_modal.clone();
 
         let user_ctx = user_ctx.clone();
         let navigator = navigator.clone();
@@ -137,6 +139,7 @@ pub fn settings() -> Html {
 
             let success_message = success_message.clone();
             let error_message = error_message.clone();
+            let show_delete_modal = show_delete_modal.clone();
 
             let user_ctx = user_ctx.clone();
             let navigator = navigator.clone();
@@ -158,10 +161,26 @@ pub fn settings() -> Html {
                             user_ctx.set_user.emit(None::<User>);
                             navigator.push(&Route::Login);
                         }
-                        Err(err) => error_message.set(err),
+                        Err(err) => {
+                            error_message.set(err);
+                            show_delete_modal.set(false);
+                        }
                     }
                 }
             });
+        })
+    };
+
+    let on_open_delete_modal = {
+        let show_delete_modal = show_delete_modal.clone();
+        Callback::from(move |_e: MouseEvent| {
+            show_delete_modal.set(true);
+        })
+    };
+    let on_close_delete_modal = {
+        let show_delete_modal = show_delete_modal.clone();
+        Callback::from(move |_e: MouseEvent| {
+            show_delete_modal.set(false);
         })
     };
 
@@ -228,7 +247,7 @@ pub fn settings() -> Html {
                         class="btn btn-outline-danger mx-auto w-50"
                         type="button"
                         disabled={is_delete_invalid}
-                        onclick={on_delete}
+                        onclick={on_open_delete_modal}
                     >
                         <i class="bi bi-archive-fill me-2"></i>
                         { "Delete Account" }
@@ -240,6 +259,47 @@ pub fn settings() -> Html {
                     </div>
                 }
             </form>
+
+            // Delete Account Modal
+            if *show_delete_modal {
+                <div class="modal fade show" style="display: block;" tabindex="-1" role="dialog">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header border-0">
+                                <h5 class="modal-title fw-bold">{ "Confirm Account Deletion" }</h5>
+                                <button
+                                    type="button"
+                                    class="btn-close"
+                                    onclick={on_close_delete_modal.clone()}
+                                ></button>
+                            </div>
+                            <div class="modal-body">
+                                <p class="text-muted">
+                                    { "Are you sure you want to delete your account? This action cannot be undone." }
+                                </p>
+                            </div>
+                            <div class="modal-footer border-0">
+                                <button
+                                    type="button"
+                                    class="btn btn-secondary"
+                                    onclick={on_close_delete_modal}
+                                >
+                                    { "Cancel" }
+                                </button>
+                                <button
+                                    type="button"
+                                    class="btn btn-danger"
+                                    onclick={on_delete}
+                                >
+                                    <i class="bi bi-trash-fill me-2"></i>
+                                    { "Delete Account" }
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-backdrop fade show"></div>
+            }
         </div>
     }
 }
