@@ -74,6 +74,49 @@ wasm-bindgen = "0.2"
 reqwest = { version = "0.11", features = ["json"] }
 ```
 
+## 🏗️ Architecture
+The Key Manager application follows a client-server architecture with clear separation of concerns:
+![architecture-diagram](https://github.com/user-attachments/assets/014b2399-aaed-4994-90bd-329fe26d8b17)
+
+The diagram shows how the frontend (Yew/WebAssembly) and automated tasks interact with various backend components through the Rocket web server. The system integrates security features, key management functionality, email services, and database operations in a structured way.
+
+## 🤔 Design Choices & Alternatives
+
+### Backend Framework
+- **Choice**: Rocket
+- **Alternatives**: Actix Web, Warp, Axum
+- **Rationale**: Great balance of performance and developer experience with minimal boilerplate
+
+### Frontend Technology
+- **Choice**: Yew with WebAssembly
+- **Alternatives**: React, Vue, Leptos
+- **Rationale**: Shared Rust types between frontend/backend and familiar component model
+
+### Storage Encryption
+- **Choice**: AES-GCM with per-user keys
+- **Alternatives**: Database-level encryption, HTTPS only
+- **Rationale**: End-to-end protection even during database compromise
+
+### Authentication
+- **Choice**: JWT tokens with bcrypt
+- **Alternatives**: Session-based auth, OAuth
+- **Rationale**: Stateless, scalable auth with proven password security
+
+## 📊 Project Evaluation
+
+### What Worked Well
+- Rust's type system prevented runtime errors
+- Borrow checker eliminated memory safety issues
+- Explicit error handling improved reliability
+- Excellent performance with minimal optimization
+
+### Rust vs Other Languages
+- **vs JavaScript**: More upfront design but fewer runtime exceptions
+- **vs Python**: Longer initial development but better maintainability and performance
+- **vs Java/C#**: Similar safety guarantees without garbage collection overhead
+
+Rust's compile-time guarantees and memory safety proved invaluable for our security-focused application.
+
 ### 🚀 Running the Application
 1. Clone the repository
 ```
