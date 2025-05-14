@@ -6,7 +6,7 @@ use yew_router::prelude::Link;
 use crate::components::app_router::Route;
 use crate::constants::key_types::{get_type_class, API_KEY, PASSWORD, SSH_KEY, TOKEN};
 use crate::context::user_context::use_user_context;
-use crate::helpers::date::format_date;
+use crate::helpers::date::{format_date, validate_date, DateStatus};
 use crate::helpers::storage;
 use crate::models::key::PartialKey;
 use crate::services::keys;
@@ -258,7 +258,13 @@ pub fn dashboard() -> Html {
                                                     {key.key_tag.as_deref().unwrap_or("")}
                                                 </span>
                                             </td>
-                                            <td>
+                                            <td
+                                                class={
+                                                    if validate_date(key.expiration_date) == DateStatus::AboutToExpire { "text-danger" }
+                                                    else { "" }
+                                                }
+
+                                            >
                                                 {
                                                     key.expiration_date
                                                         .map_or(

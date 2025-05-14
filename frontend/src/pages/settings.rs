@@ -177,6 +177,7 @@ pub fn settings() -> Html {
             show_delete_modal.set(true);
         })
     };
+
     let on_close_delete_modal = {
         let show_delete_modal = show_delete_modal.clone();
         Callback::from(move |_e: MouseEvent| {
@@ -260,7 +261,6 @@ pub fn settings() -> Html {
                 }
             </form>
 
-            // Delete Account Modal
             if *show_delete_modal {
                 <div class="modal fade show" style="display: block;" tabindex="-1" role="dialog">
                     <div class="modal-dialog modal-dialog-centered">
@@ -291,8 +291,7 @@ pub fn settings() -> Html {
                                     class="btn btn-danger"
                                     onclick={on_delete}
                                 >
-                                    <i class="bi bi-trash-fill me-2"></i>
-                                    { "Delete Account" }
+                                    { "Delete" }
                                 </button>
                             </div>
                         </div>

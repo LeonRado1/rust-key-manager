@@ -37,27 +37,21 @@ CREATE TABLE recovery_codes (
     is_used BOOLEAN NOT NULL DEFAULT false
 );
 
--- Indexes for the users table
 CREATE INDEX idx_users_email ON users(email);
 
--- Indexes for the recovery_codes table
 CREATE INDEX idx_recovery_codes_user_unused ON recovery_codes(user_id, is_used)
     WHERE is_used = false;
 
--- Indexes for the keys table
 CREATE INDEX idx_keys_user_id ON keys(user_id);
 
--- Indexes for the active keys
 CREATE INDEX idx_keys_user_active ON keys(user_id)
     WHERE is_revoked = false;
 
--- Indexes for the sorting
 CREATE INDEX idx_keys_updated_at ON keys(updated_at DESC NULLS LAST);
 
--- Init data for key_types
-INSERT INTO key_types (id, key_type) VALUES
-(1, 'PASSWORD'),
-(2, 'TOKEN'),
-(3, 'API_KEY'),
-(4, 'SSH_KEY');
-
+INSERT INTO key_types (id, key_type)
+VALUES
+    (1, 'PASSWORD'),
+    (2, 'TOKEN'),
+    (3, 'API_KEY'),
+    (4, 'SSH_KEY');
